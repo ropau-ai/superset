@@ -75,7 +75,11 @@ export function SettingsRow({
 
 	if (!onPress) return body;
 	return (
-		<Pressable className="active:bg-accent" disabled={disabled} onPress={onPress}>
+		<Pressable
+			className="active:bg-accent"
+			disabled={disabled}
+			onPress={onPress}
+		>
 			{body}
 		</Pressable>
 	);

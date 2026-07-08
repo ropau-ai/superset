@@ -8,10 +8,10 @@
 //
 // Keep the geometry in sync with components/EmilienLogo/EmilienLogo.tsx.
 
-import { deflateSync } from "node:zlib";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { deflateSync } from "node:zlib";
 
 const EMBER = { r: 240, g: 101, b: 58 }; // #F0653A
 const DARK = { r: 11, g: 11, b: 15 }; // #0B0B0F
@@ -111,7 +111,8 @@ const CRC_TABLE = (() => {
 
 function crc32(buf) {
 	let c = 0xffffffff;
-	for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+	for (let i = 0; i < buf.length; i++)
+		c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
 	return (c ^ 0xffffffff) >>> 0;
 }
 

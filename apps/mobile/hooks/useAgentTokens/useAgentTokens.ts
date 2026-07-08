@@ -45,7 +45,9 @@ function resolveTokens(_args: UseAgentTokensArgs): AgentTokens | null {
  * usage source is reachable (the case today) so callers render "—" rather than
  * inventing a number. Pure + synchronous: it's a formatting seam, not a fetch.
  */
-export function useAgentTokens(args: UseAgentTokensArgs = {}): AgentTokens | null {
+export function useAgentTokens(
+	args: UseAgentTokensArgs = {},
+): AgentTokens | null {
 	return resolveTokens(args);
 }
 

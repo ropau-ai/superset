@@ -25,7 +25,9 @@ export interface EmilienContext {
 
 function activeMs(session: SelectChatSession): number {
 	return (
-		session.lastActiveAt ?? session.updatedAt ?? session.createdAt
+		session.lastActiveAt ??
+		session.updatedAt ??
+		session.createdAt
 	).getTime();
 }
 

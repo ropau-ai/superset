@@ -33,7 +33,14 @@ export function EmilienLogo({
 	return (
 		<Svg width={size} height={size} viewBox="0 0 40 40" fill="none">
 			{backgroundColor ? (
-				<Rect x={0} y={0} width={40} height={40} rx={10} fill={backgroundColor} />
+				<Rect
+					x={0}
+					y={0}
+					width={40}
+					height={40}
+					rx={10}
+					fill={backgroundColor}
+				/>
 			) : null}
 			<Circle
 				cx={20}

@@ -30,7 +30,9 @@ export function TokenBadge({ tokens, iconless, className }: TokenBadgeProps) {
 					strokeWidth={1.75}
 				/>
 			)}
-			<Text className="font-mono text-[11px] text-muted-foreground">{label}</Text>
+			<Text className="font-mono text-[11px] text-muted-foreground">
+				{label}
+			</Text>
 		</View>
 	);
 }

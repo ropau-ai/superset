@@ -4,12 +4,7 @@ import { compareDesc } from "date-fns";
 import { useRouter } from "expo-router";
 import { ChevronsUpDown, FolderGit2 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import {
-	Pressable,
-	ScrollView,
-	useWindowDimensions,
-	View,
-} from "react-native";
+import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EmilienLogo } from "@/components/EmilienLogo";
 import { Icon } from "@/components/ui/icon";
@@ -17,8 +12,6 @@ import { Text } from "@/components/ui/text";
 import { useAgentTokens } from "@/hooks/useAgentTokens";
 import { useSession } from "@/lib/auth/client";
 import { buildHostRoutingKey, isRelayConfigured } from "@/lib/relay/relay";
-import { useOrganizations } from "@/screens/(authenticated)/hooks/useOrganizations";
-import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 import {
 	deriveAgentStatus,
 	type LiveAgentStatus,
@@ -26,18 +19,14 @@ import {
 	statusForBinding,
 } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
 import { useAgentActivity } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/hooks/useAgentActivity";
-import { OrganizationAvatar } from "../workspaces/components/OrganizationSwitcherSheet/components/OrganizationAvatar";
+import { useOrganizations } from "@/screens/(authenticated)/hooks/useOrganizations";
+import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 import { OrganizationSwitcherSheet } from "../workspaces/components/OrganizationSwitcherSheet";
+import { OrganizationAvatar } from "../workspaces/components/OrganizationSwitcherSheet/components/OrganizationAvatar";
 import { EmilienCard } from "./components/EmilienCard";
-import {
-	FleetSection,
-	type FleetGroupView,
-} from "./components/FleetSection";
+import { type FleetGroupView, FleetSection } from "./components/FleetSection";
 import { useEmilienSession } from "./hooks/useEmilienSession";
-import {
-	type FleetWorkspaceRef,
-	useFleetAgents,
-} from "./hooks/useFleetAgents";
+import { type FleetWorkspaceRef, useFleetAgents } from "./hooks/useFleetAgents";
 
 const NO_WORKSPACE_KEY = "__no_workspace__";
 
@@ -103,7 +92,8 @@ export function CockpitScreen() {
 		[hosts],
 	);
 	const workspacesById = useMemo(
-		() => new Map((workspaces ?? []).map((workspace) => [workspace.id, workspace])),
+		() =>
+			new Map((workspaces ?? []).map((workspace) => [workspace.id, workspace])),
 		[workspaces],
 	);
 
@@ -145,7 +135,9 @@ export function CockpitScreen() {
 		emilienActivity.bindings,
 		now,
 	]);
-	const emilienTokens = useAgentTokens({ sessionId: emilien.session?.id ?? null });
+	const emilienTokens = useAgentTokens({
+		sessionId: emilien.session?.id ?? null,
+	});
 
 	// --- Fleet: every non-Emilien session, grouped by workspace -------------
 	const rawFleetGroups = useMemo<RawFleetGroup[]>(() => {
@@ -172,7 +164,10 @@ export function CockpitScreen() {
 		return [...groups.values()].sort((a, b) => {
 			if (!a.workspace) return 1;
 			if (!b.workspace) return -1;
-			return compareDesc(lastActiveAt(a.sessions[0]), lastActiveAt(b.sessions[0]));
+			return compareDesc(
+				lastActiveAt(a.sessions[0]),
+				lastActiveAt(b.sessions[0]),
+			);
 		});
 	}, [sessions, workspacesById, emilien.session?.id]);
 
@@ -256,7 +251,9 @@ export function CockpitScreen() {
 				</Pressable>
 				<Pressable
 					hitSlop={8}
-					onPress={() => router.push("/(authenticated)/(tabs)/(home)/workspaces")}
+					onPress={() =>
+						router.push("/(authenticated)/(tabs)/(home)/workspaces")
+					}
 					className="p-1"
 				>
 					<Icon

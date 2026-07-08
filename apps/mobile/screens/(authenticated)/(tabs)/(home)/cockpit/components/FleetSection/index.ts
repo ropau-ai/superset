@@ -1,5 +1,5 @@
 export {
-	FleetSection,
 	type FleetGroupView,
+	FleetSection,
 	type FleetSectionProps,
 } from "./FleetSection";

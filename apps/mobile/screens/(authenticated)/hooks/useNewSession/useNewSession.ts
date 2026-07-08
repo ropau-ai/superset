@@ -5,10 +5,7 @@ import { randomUUID } from "expo-crypto";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Alert, useWindowDimensions } from "react-native";
-import {
-	type AgentTypeId,
-	DEFAULT_AGENT_TYPE,
-} from "@/lib/agentTypes";
+import { type AgentTypeId, DEFAULT_AGENT_TYPE } from "@/lib/agentTypes";
 import { apiClient } from "@/lib/trpc/client";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 

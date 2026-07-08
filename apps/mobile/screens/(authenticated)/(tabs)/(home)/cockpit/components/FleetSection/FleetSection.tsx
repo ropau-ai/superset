@@ -8,8 +8,8 @@ import { TokenBadge } from "@/components/TokenBadge";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { useAgentTokens } from "@/hooks/useAgentTokens";
-import { AgentStatusBadge } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/AgentStatusBadge";
 import type { LiveAgentStatus } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
+import { AgentStatusBadge } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/AgentStatusBadge";
 
 /** A session is "hot" if it moved in the last two minutes → live green pulse. */
 const HOT_WINDOW_MS = 2 * 60 * 1000;
@@ -55,11 +55,7 @@ function FleetRow({
 			className="flex-row items-center gap-3 rounded-xl px-3 py-2.5 active:bg-accent"
 			onPress={onPress}
 		>
-			<LivePulseDot
-				active={hot}
-				color={hot ? "#34d399" : "#52525b"}
-				size={7}
-			/>
+			<LivePulseDot active={hot} color={hot ? "#34d399" : "#52525b"} size={7} />
 			<View className="flex-1 gap-0.5">
 				<Text className="font-medium text-sm" numberOfLines={1}>
 					{session.title ?? "Untitled session"}
@@ -91,7 +87,11 @@ function FleetGroup({
 	onPressSession: (session: SelectChatSession) => void;
 }) {
 	const HostIcon =
-		group.hostOnline === undefined ? Cloud : group.hostOnline ? Cloud : CloudOff;
+		group.hostOnline === undefined
+			? Cloud
+			: group.hostOnline
+				? Cloud
+				: CloudOff;
 
 	return (
 		<View className="gap-1 rounded-2xl border border-border bg-card p-2">
@@ -122,7 +122,10 @@ function FleetGroup({
 				<AgentTypeChip definitionId={group.agentDefinitionId} />
 				<View className="flex-1" />
 				{group.status ? (
-					<AgentStatusBadge kind={group.status.kind} label={group.status.label} />
+					<AgentStatusBadge
+						kind={group.status.kind}
+						label={group.status.label}
+					/>
 				) : null}
 			</View>
 			{group.sessions.map((session) => (
@@ -142,7 +145,11 @@ function FleetGroup({
  * activity, with the workspace's live agent-type + status pulled from the relay.
  * Renders Emilien's calm empty state when the fleet is idle.
  */
-export function FleetSection({ groups, now, onPressSession }: FleetSectionProps) {
+export function FleetSection({
+	groups,
+	now,
+	onPressSession,
+}: FleetSectionProps) {
 	const sessionCount = groups.reduce((sum, g) => sum + g.sessions.length, 0);
 
 	return (
@@ -166,7 +173,9 @@ export function FleetSection({ groups, now, onPressSession }: FleetSectionProps)
 			{groups.length === 0 ? (
 				<View className="items-center gap-2 rounded-2xl border border-border border-dashed px-6 py-10">
 					<LivePulseDot active color="#34d399" size={9} />
-					<Text className="text-center font-medium text-sm">Emilien veille.</Text>
+					<Text className="text-center font-medium text-sm">
+						Emilien veille.
+					</Text>
 					<Text className="max-w-xs text-center text-muted-foreground text-xs">
 						Aucun sous-agent actif. La flotte apparaîtra ici dès qu'Emilien
 						lancera un run.

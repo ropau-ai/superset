@@ -12,6 +12,7 @@ import {
 	Palette,
 	User,
 } from "lucide-react-native";
+import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { EmilienLogo } from "@/components/EmilienLogo";
 import { Switch } from "@/components/ui/switch";
@@ -26,12 +27,11 @@ import {
 } from "@/lib/notifications";
 import { EMBER } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-import { useOrganizations } from "@/screens/(authenticated)/hooks/useOrganizations";
 import { useEmilienSession } from "@/screens/(authenticated)/(tabs)/(home)/cockpit/hooks/useEmilienSession";
+import { useOrganizations } from "@/screens/(authenticated)/hooks/useOrganizations";
 import { OrganizationAvatar } from "../../(home)/workspaces/components/OrganizationSwitcherSheet/components/OrganizationAvatar";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
-import { useState } from "react";
 
 const SCOPE_OPTIONS: { value: NotificationScope; label: string }[] = [
 	{ value: "emilien", label: "Emilien only" },
@@ -79,15 +79,21 @@ export function SettingsScreen() {
 	const router = useRouter();
 	const { data: authData } = useSession();
 	const { signOut } = useSignOut();
-	const { organizations, activeOrganization, activeOrganizationId, switchOrganization } =
-		useOrganizations();
+	const {
+		organizations,
+		activeOrganization,
+		activeOrganizationId,
+		switchOrganization,
+	} = useOrganizations();
 	const { enabled, setEnabled } = useAgentNotificationsEnabled();
 	const { scope, setScope } = useNotificationScope();
 	const emilien = useEmilienSession();
 	const [permissionBlocked, setPermissionBlocked] = useState(false);
 
 	const email = authData?.user?.email ?? "Signed in";
-	const otherOrgs = organizations.filter((org) => org.id !== activeOrganizationId);
+	const otherOrgs = organizations.filter(
+		(org) => org.id !== activeOrganizationId,
+	);
 	const projectLabel = emilien.project
 		? `${emilien.project.name} / ${emilien.workspace?.branch ?? "main"}`
 		: "Zuno-Emilien / main";
@@ -179,7 +185,10 @@ export function SettingsScreen() {
 					icon={Bell}
 					label="Agent notifications"
 					right={
-						<Switch checked={enabled} onCheckedChange={handleToggleNotifications} />
+						<Switch
+							checked={enabled}
+							onCheckedChange={handleToggleNotifications}
+						/>
 					}
 					sublabel="A heads-up when an agent needs approval or finishes."
 				/>

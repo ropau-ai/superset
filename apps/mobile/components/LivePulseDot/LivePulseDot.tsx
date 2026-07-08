@@ -51,11 +51,21 @@ export function LivePulseDot({
 
 	return (
 		<View
-			style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}
+			style={{
+				width: size,
+				height: size,
+				alignItems: "center",
+				justifyContent: "center",
+			}}
 		>
 			<Animated.View
 				style={[
-					{ width: size, height: size, borderRadius: size / 2, backgroundColor: color },
+					{
+						width: size,
+						height: size,
+						borderRadius: size / 2,
+						backgroundColor: color,
+					},
 					active ? style : undefined,
 				]}
 			/>

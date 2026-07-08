@@ -1,7 +1,12 @@
 import { useLiveQuery } from "@tanstack/react-db";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import {
+	Alert,
+	KeyboardAvoidingView,
+	Platform,
+	ScrollView,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSession } from "@/lib/auth/client";
 import {
@@ -9,9 +14,9 @@ import {
 	isRelayConfigured,
 	sendSessionMessage,
 } from "@/lib/relay/relay";
-import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 import { ActivityFeed } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/ActivityFeed";
 import { useSessionActivity } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/hooks/useSessionActivity";
+import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 import { ChatComposer } from "./components/ChatComposer";
 
 /**
@@ -45,11 +50,13 @@ export function ChatThreadScreen() {
 		[collections],
 	);
 
-	const session = (sessions ?? []).find((item) => item.id === sessionId) ?? null;
+	const session =
+		(sessions ?? []).find((item) => item.id === sessionId) ?? null;
 	const workspace =
 		(workspaces ?? []).find((item) => item.id === workspaceId) ?? null;
 	const host = workspace
-		? ((hosts ?? []).find((item) => item.machineId === workspace.hostId) ?? null)
+		? ((hosts ?? []).find((item) => item.machineId === workspace.hostId) ??
+			null)
 		: null;
 
 	const hostOnline = host ? host.isOnline : null;

@@ -8,8 +8,8 @@ import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import type { AgentTokens } from "@/hooks/useAgentTokens";
 import { EMBER } from "@/lib/theme";
-import { AgentStatusBadge } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/AgentStatusBadge";
 import type { LiveAgentStatus } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
+import { AgentStatusBadge } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/AgentStatusBadge";
 
 const EMBER_BORDER = "rgba(240,101,58,0.42)";
 const EMBER_WASH = "rgba(240,101,58,0.06)";
