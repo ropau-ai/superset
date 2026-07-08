@@ -1,16 +1,40 @@
 import { useLiveQuery } from "@tanstack/react-db";
-import { format, formatDistanceToNow } from "date-fns";
-import { useLocalSearchParams } from "expo-router";
-import { Circle, Cloud, CloudOff } from "lucide-react-native";
+import { Stack, useLocalSearchParams } from "expo-router";
+import { Activity, TerminalIcon } from "lucide-react-native";
+import { useEffect, useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
-import { ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { Icon } from "@/components/ui/icon";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Text } from "@/components/ui/text";
+import { useSession } from "@/lib/auth/client";
+import { buildHostRoutingKey, isRelayConfigured } from "@/lib/relay/relay";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
+import { deriveAgentStatus, type LiveAgentStatus } from "./agentStatus";
+import { ActivityFeed } from "./components/ActivityFeed";
+import { LiveSessionHeader } from "./components/LiveSessionHeader";
+import { LiveTerminal } from "./components/LiveTerminal";
+import { useAgentActivity } from "./hooks/useAgentActivity";
+import { useTerminalStream } from "./hooks/useTerminalStream";
+
+type LiveTab = "terminal" | "activity";
+
+/** Ticking wall clock so the duration + staleness re-derive live. */
+function useNow(intervalMs: number): number {
+	const [now, setNow] = useState(() => Date.now());
+	useEffect(() => {
+		const id = setInterval(() => setNow(Date.now()), intervalMs);
+		return () => clearInterval(id);
+	}, [intervalMs]);
+	return now;
+}
 
 export function SessionDetailScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const collections = useCollections();
+	const { data: authData } = useSession();
+	const organizationId = authData?.session?.activeOrganizationId ?? null;
+	const now = useNow(1000);
+	const [tab, setTab] = useState<LiveTab>("terminal");
 
 	const { data: sessions, isReady: sessionsReady } = useLiveQuery(
 		(q) => q.from({ chatSessions: collections.chatSessions }),
@@ -36,58 +60,99 @@ export function SessionDetailScreen() {
 			null)
 		: null;
 
+	const hostOnline = host ? host.isOnline : null;
+	const relayConfigured = isRelayConfigured();
+	const workspaceId = session?.v2WorkspaceId ?? null;
+	const routingKey =
+		organizationId && workspace
+			? buildHostRoutingKey(organizationId, workspace.hostId)
+			: null;
+	const relayReady =
+		relayConfigured && hostOnline === true && !!routingKey && !!workspaceId;
+
+	const activity = useAgentActivity({
+		routingKey,
+		workspaceId,
+		enabled: relayReady,
+	});
+	const stream = useTerminalStream({
+		routingKey,
+		workspaceId,
+		enabled: relayReady && tab === "terminal",
+	});
+
+	const status = useMemo<LiveAgentStatus>(() => {
+		if (!relayConfigured) return { kind: "ended", label: "Status unavailable" };
+		if (hostOnline === false) return { kind: "ended", label: "Host offline" };
+		if (hostOnline === null) return { kind: "ended", label: "No host" };
+		if (activity.phase === "loading" && activity.bindings.length === 0) {
+			return { kind: "unknown", label: "Connecting…" };
+		}
+		return deriveAgentStatus(activity.bindings, now);
+	}, [relayConfigured, hostOnline, activity.phase, activity.bindings, now]);
+
 	return (
-		<ScrollView className="flex-1 bg-background">
-			<View className="gap-5 p-6">
-				{session ? (
-					<>
-						<View className="gap-3">
-							<Text className="text-2xl font-bold" numberOfLines={3}>
-								{session.title ?? "Untitled session"}
-							</Text>
-							<View className="flex-row items-center gap-2">
-								<Icon
-									as={host?.isOnline ? Cloud : host ? CloudOff : Circle}
-									className="text-muted-foreground size-4"
-									strokeWidth={1.75}
-								/>
-								<Text className="text-muted-foreground" numberOfLines={1}>
-									{workspace?.name ?? "No workspace"}
-								</Text>
-								{host ? (
-									<Text className="text-muted-foreground text-xs">
-										· {host.isOnline ? "online" : "offline"}
-									</Text>
-								) : null}
-							</View>
-							<Text className="text-muted-foreground text-sm">
-								Last active{" "}
-								{formatDistanceToNow(
-									session.lastActiveAt ??
-										session.updatedAt ??
-										session.createdAt,
-									{ addSuffix: true },
-								)}
-							</Text>
-							<Text className="text-muted-foreground text-xs">
-								Created {format(session.createdAt, "PPp")}
-							</Text>
-						</View>
-						<View className="border-border min-h-[220px] rounded-xl border">
-							<ConversationEmptyState
-								title="Live tracking coming soon"
-								description="Session activity and messages will stream here once the agent runtime is wired up."
+		<ScrollView
+			className="flex-1 bg-background"
+			contentContainerClassName="gap-5 p-6"
+			contentInsetAdjustmentBehavior="automatic"
+		>
+			{session ? (
+				<>
+					<Stack.Screen
+						options={{ title: workspace?.name ?? "Live session" }}
+					/>
+					<LiveSessionHeader
+						hostOnline={hostOnline}
+						lastActiveAt={
+							session.lastActiveAt ?? session.updatedAt ?? session.createdAt
+						}
+						now={now}
+						startedAt={session.createdAt}
+						status={status}
+						title={session.title ?? "Untitled session"}
+						workspaceName={workspace?.name ?? "No workspace"}
+					/>
+
+					<Tabs
+						className="gap-4"
+						onValueChange={(value) => setTab(value as LiveTab)}
+						value={tab}
+					>
+						<TabsList>
+							<TabsTrigger value="terminal">
+								<Icon as={TerminalIcon} className="size-4" strokeWidth={2} />
+								<Text>Terminal</Text>
+							</TabsTrigger>
+							<TabsTrigger value="activity">
+								<Icon as={Activity} className="size-4" strokeWidth={2} />
+								<Text>Activity</Text>
+							</TabsTrigger>
+						</TabsList>
+
+						<TabsContent value="terminal">
+							<LiveTerminal relayConfigured={relayConfigured} stream={stream} />
+						</TabsContent>
+
+						<TabsContent value="activity">
+							<ActivityFeed
+								bindings={activity.bindings}
+								error={activity.error}
+								hostOnline={hostOnline}
+								now={now}
+								phase={activity.phase}
+								relayConfigured={relayConfigured}
 							/>
-						</View>
-					</>
-				) : sessionsReady ? (
-					<View className="items-center justify-center py-20">
-						<Text className="text-center text-muted-foreground">
-							Session not found
-						</Text>
-					</View>
-				) : null}
-			</View>
+						</TabsContent>
+					</Tabs>
+				</>
+			) : sessionsReady ? (
+				<View className="items-center justify-center py-20">
+					<Text className="text-center text-muted-foreground">
+						Session not found
+					</Text>
+				</View>
+			) : null}
 		</ScrollView>
 	);
 }
