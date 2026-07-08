@@ -1,12 +1,14 @@
 import type { SelectChatSession, SelectV2Workspace } from "@superset/db/schema";
 import { useLiveQuery } from "@tanstack/react-db";
 import { compareDesc } from "date-fns";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { Circle, Cloud, CloudOff } from "lucide-react-native";
 import { useCallback, useMemo } from "react";
 import { SectionList, View } from "react-native";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
+import { NewSessionSheet } from "@/screens/(authenticated)/components/NewSessionSheet";
+import { useNewSession } from "@/screens/(authenticated)/hooks/useNewSession";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 import { SessionRow } from "./components/SessionRow";
 
@@ -26,6 +28,7 @@ function lastActiveAt(session: SelectChatSession): Date {
 export function SessionsScreen() {
 	const router = useRouter();
 	const collections = useCollections();
+	const newSession = useNewSession();
 
 	const { data: sessions, isReady: sessionsReady } = useLiveQuery(
 		(q) => q.from({ chatSessions: collections.chatSessions }),
@@ -120,25 +123,34 @@ export function SessionsScreen() {
 	);
 
 	return (
-		<SectionList
-			className="flex-1 bg-background"
-			contentInsetAdjustmentBehavior="automatic"
-			contentContainerStyle={{ paddingBottom: 112 }}
-			sections={sections}
-			extraData={renderItem}
-			keyExtractor={(item) => item.id}
-			renderItem={renderItem}
-			renderSectionHeader={renderSectionHeader}
-			stickySectionHeadersEnabled={false}
-			ListEmptyComponent={
-				sessionsReady ? (
-					<View className="items-center justify-center py-20">
-						<Text className="text-center text-muted-foreground">
-							No sessions yet
-						</Text>
-					</View>
-				) : null
-			}
-		/>
+		<>
+			<Stack.Toolbar placement="right">
+				<Stack.Toolbar.Button
+					icon="square.and.pencil"
+					onPress={newSession.open}
+				/>
+			</Stack.Toolbar>
+			<SectionList
+				className="flex-1 bg-background"
+				contentInsetAdjustmentBehavior="automatic"
+				contentContainerStyle={{ paddingBottom: 112 }}
+				sections={sections}
+				extraData={renderItem}
+				keyExtractor={(item) => item.id}
+				renderItem={renderItem}
+				renderSectionHeader={renderSectionHeader}
+				stickySectionHeadersEnabled={false}
+				ListEmptyComponent={
+					sessionsReady ? (
+						<View className="items-center justify-center py-20">
+							<Text className="text-center text-muted-foreground">
+								No sessions yet
+							</Text>
+						</View>
+					) : null
+				}
+			/>
+			<NewSessionSheet {...newSession.sheetProps} />
+		</>
 	);
 }
