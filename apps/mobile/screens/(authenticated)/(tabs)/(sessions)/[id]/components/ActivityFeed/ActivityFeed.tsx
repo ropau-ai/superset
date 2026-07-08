@@ -59,6 +59,10 @@ export interface ActivityFeedProps {
 	error: string | null;
 	relayConfigured: boolean;
 	hostOnline: boolean | null;
+	/** Id currently spoken aloud (chat only). Absent on the Activity tab. */
+	speakingId?: string | null;
+	/** Toggles read-aloud for an assistant message (chat only). */
+	onToggleSpeak?: (message: ChatActivityMessage) => void;
 }
 
 /**
@@ -74,6 +78,8 @@ export function ActivityFeed({
 	error,
 	relayConfigured,
 	hostOnline,
+	speakingId,
+	onToggleSpeak,
 }: ActivityFeedProps) {
 	const visible = useMemo(
 		() => messages.filter(hasRenderableContent),
@@ -158,7 +164,12 @@ export function ActivityFeed({
 	return (
 		<View className="gap-4">
 			{visible.map((message) => (
-				<ActivityMessage key={message.id} message={message} />
+				<ActivityMessage
+					key={message.id}
+					message={message}
+					onToggleSpeak={onToggleSpeak}
+					speakingId={speakingId}
+				/>
 			))}
 		</View>
 	);

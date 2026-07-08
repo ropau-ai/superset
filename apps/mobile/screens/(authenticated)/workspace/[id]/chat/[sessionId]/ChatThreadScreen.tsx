@@ -1,19 +1,26 @@
 import { useLiveQuery } from "@tanstack/react-db";
 import { Stack, useLocalSearchParams } from "expo-router";
+import { Volume2, VolumeX } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	Alert,
 	KeyboardAvoidingView,
 	Platform,
+	Pressable,
 	ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { useTheme } from "@/hooks/useTheme";
 import { useSession } from "@/lib/auth/client";
+import type { ChatActivityMessage } from "@/lib/relay/relay";
 import {
 	buildHostRoutingKey,
 	isRelayConfigured,
 	sendSessionMessage,
 } from "@/lib/relay/relay";
+import { speakableText } from "@/lib/speech/speakableText";
+import { EMBER } from "@/lib/theme";
 import { ActivityFeed } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/ActivityFeed";
 import { useSessionActivity } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/hooks/useSessionActivity";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
@@ -33,6 +40,7 @@ export function ChatThreadScreen() {
 		sessionId: string;
 	}>();
 	const insets = useSafeAreaInsets();
+	const theme = useTheme();
 	const collections = useCollections();
 	const { data: authData } = useSession();
 	const organizationId = authData?.session?.activeOrganizationId ?? null;
@@ -89,6 +97,60 @@ export function ChatThreadScreen() {
 		return () => clearTimeout(timer);
 	}, [activity.messages.length]);
 
+	const {
+		available: ttsAvailable,
+		speakingId,
+		speak,
+		stop: stopSpeaking,
+	} = useTextToSpeech();
+	const [autoSpeak, setAutoSpeak] = useState(false);
+	const spokenRef = useRef<Set<string>>(new Set());
+	const initializedRef = useRef(false);
+
+	// Auto-speak only genuinely new assistant messages. On the first real load we
+	// seed the existing backlog as "already seen" so switching auto-speak on later
+	// never replays the whole history.
+	useEffect(() => {
+		const assistantMessages = activity.messages.filter(
+			(message) => message.role === "assistant",
+		);
+		if (!initializedRef.current) {
+			if (activity.phase !== "ready") return;
+			for (const message of assistantMessages) {
+				spokenRef.current.add(message.id);
+			}
+			initializedRef.current = true;
+			return;
+		}
+		const fresh = assistantMessages.filter(
+			(message) => !spokenRef.current.has(message.id),
+		);
+		for (const message of fresh) spokenRef.current.add(message.id);
+		if (!autoSpeak || fresh.length === 0) return;
+		const newest = fresh[fresh.length - 1];
+		const text = speakableText(newest);
+		if (text) speak(newest.id, text);
+	}, [activity.messages, activity.phase, autoSpeak, speak]);
+
+	const toggleAutoSpeak = useCallback(() => {
+		setAutoSpeak((previous) => {
+			if (previous) stopSpeaking();
+			return !previous;
+		});
+	}, [stopSpeaking]);
+
+	const handleToggleSpeak = useCallback(
+		(message: ChatActivityMessage) => {
+			if (speakingId === message.id) {
+				stopSpeaking();
+				return;
+			}
+			const text = speakableText(message);
+			if (text) speak(message.id, text);
+		},
+		[speakingId, speak, stopSpeaking],
+	);
+
 	const send = useCallback(async () => {
 		const content = draft.trim();
 		if (!content || sending || !routingKey || !workspace || !sessionId) return;
@@ -121,7 +183,41 @@ export function ChatThreadScreen() {
 			keyboardVerticalOffset={insets.top + 44}
 			style={{ flex: 1 }}
 		>
-			<Stack.Screen options={{ title: session?.title ?? "Emilien" }} />
+			<Stack.Screen
+				options={{
+					title: session?.title ?? "Emilien",
+					// Auto-speak toggle — hidden entirely when the native TTS engine
+					// isn't in this build, so there's never a dead control.
+					headerRight: ttsAvailable
+						? () => (
+								<Pressable
+									accessibilityLabel={
+										autoSpeak
+											? "Turn off speaking replies aloud"
+											: "Speak new replies aloud"
+									}
+									accessibilityRole="switch"
+									accessibilityState={{ checked: autoSpeak }}
+									className="size-9 items-center justify-center rounded-full"
+									onPress={toggleAutoSpeak}
+									style={
+										autoSpeak ? { backgroundColor: `${EMBER}1f` } : undefined
+									}
+								>
+									{autoSpeak ? (
+										<Volume2 color={EMBER} size={20} strokeWidth={1.9} />
+									) : (
+										<VolumeX
+											color={theme.mutedForeground}
+											size={20}
+											strokeWidth={1.9}
+										/>
+									)}
+								</Pressable>
+							)
+						: undefined,
+				}}
+			/>
 			<ScrollView
 				className="flex-1"
 				contentContainerClassName="gap-4 p-4"
@@ -132,8 +228,10 @@ export function ChatThreadScreen() {
 					error={activity.error}
 					hostOnline={hostOnline}
 					messages={activity.messages}
+					onToggleSpeak={ttsAvailable ? handleToggleSpeak : undefined}
 					phase={activity.phase}
 					relayConfigured={relayConfigured}
+					speakingId={speakingId}
 				/>
 			</ScrollView>
 			<ChatComposer
