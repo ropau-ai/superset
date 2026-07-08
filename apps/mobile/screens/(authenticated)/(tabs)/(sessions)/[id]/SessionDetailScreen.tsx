@@ -14,6 +14,7 @@ import { ActivityFeed } from "./components/ActivityFeed";
 import { LiveSessionHeader } from "./components/LiveSessionHeader";
 import { LiveTerminal } from "./components/LiveTerminal";
 import { useAgentActivity } from "./hooks/useAgentActivity";
+import { useSessionActivity } from "./hooks/useSessionActivity";
 import { useTerminalStream } from "./hooks/useTerminalStream";
 
 type LiveTab = "terminal" | "activity";
@@ -80,6 +81,12 @@ export function SessionDetailScreen() {
 		workspaceId,
 		enabled: relayReady && tab === "terminal",
 	});
+	const sessionActivity = useSessionActivity({
+		routingKey,
+		sessionId: id ?? null,
+		workspaceId,
+		enabled: relayReady && tab === "activity",
+	});
 
 	const status = useMemo<LiveAgentStatus>(() => {
 		if (!relayConfigured) return { kind: "ended", label: "Status unavailable" };
@@ -136,11 +143,10 @@ export function SessionDetailScreen() {
 
 						<TabsContent value="activity">
 							<ActivityFeed
-								bindings={activity.bindings}
-								error={activity.error}
+								error={sessionActivity.error}
 								hostOnline={hostOnline}
-								now={now}
-								phase={activity.phase}
+								messages={sessionActivity.messages}
+								phase={sessionActivity.phase}
 								relayConfigured={relayConfigured}
 							/>
 						</TabsContent>

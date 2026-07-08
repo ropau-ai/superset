@@ -1,4 +1,3 @@
-import { formatDistanceToNow } from "date-fns";
 import { Bot, CloudOff, Unplug, WifiOff } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
@@ -6,18 +5,9 @@ import { View } from "react-native";
 import { BrailleSpinner } from "@/components/ai-elements/braille-spinner";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
-import type { TerminalAgentBinding } from "@/lib/relay/relay";
-import { statusForBinding } from "../../agentStatus";
-import type { AgentActivityPhase } from "../../hooks/useAgentActivity";
-import { AgentStatusBadge } from "../AgentStatusBadge";
-
-const EVENT_DETAIL: Record<string, string> = {
-	working: "Running a tool",
-	waiting: "Waiting for your input",
-	idle: "Idle — turn complete",
-	ended: "Agent ended",
-	unknown: "Connecting",
-};
+import type { ChatActivityMessage } from "@/lib/relay/relay";
+import type { SessionActivityPhase } from "../../hooks/useSessionActivity";
+import { ActivityMessage } from "./components/ActivityMessage";
 
 function FeedNotice({
 	icon,
@@ -43,64 +33,51 @@ function FeedNotice({
 	);
 }
 
-function AgentActivityRow({
-	binding,
-	now,
-}: {
-	binding: TerminalAgentBinding;
-	now: number;
-}) {
-	const status = statusForBinding(binding, now);
-	return (
-		<View className="flex-row items-start gap-3 rounded-xl border border-border bg-card p-3">
-			<View className="mt-0.5 size-8 items-center justify-center rounded-lg bg-muted">
-				<Icon as={Bot} className="size-4 text-foreground" strokeWidth={1.75} />
-			</View>
-			<View className="min-w-0 flex-1 gap-1.5">
-				<View className="flex-row items-center justify-between gap-2">
-					<Text
-						className="min-w-0 shrink font-medium font-mono text-foreground text-sm"
-						numberOfLines={1}
-					>
-						{binding.agentId}
-					</Text>
-					<AgentStatusBadge kind={status.kind} label={status.label} />
-				</View>
-				<Text className="text-muted-foreground text-xs">
-					{EVENT_DETAIL[status.kind] ?? "Active"} ·{" "}
-					{formatDistanceToNow(binding.lastEventAt, { addSuffix: true })}
-				</Text>
-			</View>
-		</View>
-	);
+/** A message contributes to the timeline only if it renders visible content. */
+function hasRenderableContent(message: ChatActivityMessage): boolean {
+	const content = Array.isArray(message.content) ? message.content : [];
+	return content.some((part) => {
+		const record = part as unknown as Record<string, unknown>;
+		const type = record.type;
+		if (type === "text" || type === "thinking") {
+			return (
+				typeof record[type] === "string" && (record[type] as string).length > 0
+			);
+		}
+		return (
+			type === "tool_call" ||
+			type === "tool_result" ||
+			type === "image" ||
+			type === "file"
+		);
+	});
 }
 
 export interface ActivityFeedProps {
-	bindings: TerminalAgentBinding[];
-	phase: AgentActivityPhase;
+	messages: ChatActivityMessage[];
+	phase: SessionActivityPhase;
 	error: string | null;
 	relayConfigured: boolean;
 	hostOnline: boolean | null;
-	now: number;
 }
 
 /**
- * Timeline of the workspace's live agent lifecycle, sourced from the host's
- * `terminalAgents.listByWorkspace` over the relay. Rich per-tool activity (bash
- * output, diffs, commits) isn't synced to mobile yet, so this surfaces the real
- * agent state that IS reachable and degrades to a clear notice otherwise.
+ * The Activity tab: a live, dark, premium timeline of the agent's real actions
+ * — bash commands, file diffs, tool-use — sourced from the host's
+ * `chat.listMessages` over the relay (see useSessionActivity). Rich per-tool
+ * cards come from `components/ai-elements/*`; when the relay isn't reachable or
+ * there's nothing yet, it degrades to a clear notice rather than a blank tab.
  */
 export function ActivityFeed({
-	bindings,
+	messages,
 	phase,
 	error,
 	relayConfigured,
 	hostOnline,
-	now,
 }: ActivityFeedProps) {
-	const sorted = useMemo(
-		() => [...bindings].sort((a, b) => b.lastEventAt - a.lastEventAt),
-		[bindings],
+	const visible = useMemo(
+		() => messages.filter(hasRenderableContent),
+		[messages],
 	);
 
 	if (phase === "disabled") {
@@ -134,7 +111,7 @@ export function ActivityFeed({
 		);
 	}
 
-	if (sorted.length === 0) {
+	if (visible.length === 0) {
 		if (phase === "error") {
 			return (
 				<FeedNotice
@@ -153,9 +130,9 @@ export function ActivityFeed({
 		if (phase === "loading") {
 			return (
 				<FeedNotice
-					description="Attaching to the host to read live agent activity."
+					description="Reading the agent's live activity from the host."
 					spinner
-					title="Connecting to host…"
+					title="Loading activity…"
 				/>
 			);
 		}
@@ -163,7 +140,7 @@ export function ActivityFeed({
 			<FeedNotice
 				description={
 					hostOnline
-						? "No agents are running in this workspace right now."
+						? "Nothing here yet — the agent's commands and file edits will appear as it works."
 						: "No recent agent activity."
 				}
 				icon={
@@ -173,19 +150,15 @@ export function ActivityFeed({
 						strokeWidth={1.5}
 					/>
 				}
-				title="No active agents"
+				title="No activity yet"
 			/>
 		);
 	}
 
 	return (
-		<View className="gap-2">
-			{sorted.map((binding) => (
-				<AgentActivityRow
-					binding={binding}
-					key={binding.terminalId}
-					now={now}
-				/>
+		<View className="gap-4">
+			{visible.map((message) => (
+				<ActivityMessage key={message.id} message={message} />
 			))}
 		</View>
 	);
