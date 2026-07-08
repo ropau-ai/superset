@@ -65,3 +65,75 @@ export function useAgentNotificationsEnabled(): AgentNotificationsPreference {
 		setEnabled: setAgentNotificationsEnabled,
 	};
 }
+
+// --- Notification scope (granularity) -------------------------------------
+//
+// How much of the fleet earns a notification: just Emilien (the orchestrator),
+// or every sub-agent. Same SecureStore + pub/sub shape as the enabled toggle.
+// Defaults to the whole fleet (today's behavior).
+//
+// TODO(watcher): AgentNotificationWatcher does not yet read this scope — wire it
+// so `emilien` suppresses sub-agent notifications. Persisted + surfaced now so
+// the preference is real and ready.
+
+const SCOPE_STORAGE_KEY = "superset-agent-notifications-scope";
+
+export type NotificationScope = "emilien" | "fleet";
+
+const scopeListeners = new Set<(scope: NotificationScope) => void>();
+let cachedScope: NotificationScope | null = null;
+
+export async function getNotificationScope(): Promise<NotificationScope> {
+	if (cachedScope !== null) return cachedScope;
+	try {
+		cachedScope =
+			(await SecureStore.getItemAsync(SCOPE_STORAGE_KEY)) === "emilien"
+				? "emilien"
+				: "fleet";
+	} catch {
+		cachedScope = "fleet";
+	}
+	return cachedScope;
+}
+
+export async function setNotificationScope(
+	scope: NotificationScope,
+): Promise<void> {
+	cachedScope = scope;
+	try {
+		await SecureStore.setItemAsync(SCOPE_STORAGE_KEY, scope);
+	} catch {
+		// Best-effort persistence; the in-memory value still drives this session.
+	}
+	for (const listener of scopeListeners) listener(scope);
+}
+
+export interface NotificationScopePreference {
+	scope: NotificationScope;
+	loading: boolean;
+	setScope: (scope: NotificationScope) => Promise<void>;
+}
+
+/** Subscribe a component to the persisted notification scope. */
+export function useNotificationScope(): NotificationScopePreference {
+	const [scope, setScope] = useState<NotificationScope | null>(cachedScope);
+
+	useEffect(() => {
+		let active = true;
+		void getNotificationScope().then((value) => {
+			if (active) setScope(value);
+		});
+		const listener = (value: NotificationScope) => setScope(value);
+		scopeListeners.add(listener);
+		return () => {
+			active = false;
+			scopeListeners.delete(listener);
+		};
+	}, []);
+
+	return {
+		scope: scope ?? "fleet",
+		loading: scope === null,
+		setScope: setNotificationScope,
+	};
+}

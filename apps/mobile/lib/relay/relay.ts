@@ -216,3 +216,25 @@ export function listSessionMessages(
 		"GET",
 	);
 }
+
+/**
+ * Send a user message to a live session's agent via the host `chat.sendMessage`
+ * mutation over the relay — the same path the desktop/web composer uses. The
+ * host queues the turn and updates the cloud `lastActiveAt`; the reply streams
+ * into the thread and is picked up by the next `listSessionMessages` poll (so we
+ * don't need the mutation's return value beyond success). Throws when the relay
+ * or host can't be reached, which the composer surfaces to the user.
+ */
+export function sendSessionMessage(
+	routingKey: string,
+	sessionId: string,
+	workspaceId: string,
+	content: string,
+) {
+	return hostTrpcCall<unknown>(
+		routingKey,
+		"chat.sendMessage",
+		{ sessionId, workspaceId, payload: { content } },
+		"POST",
+	);
+}

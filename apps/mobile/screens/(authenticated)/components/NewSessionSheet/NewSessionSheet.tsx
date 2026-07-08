@@ -7,7 +7,11 @@ import {
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/ui/text";
 import { useTheme } from "@/hooks/useTheme";
+import { AGENT_TYPE_PRESETS } from "@/lib/agentTypes";
+import { EMBER } from "@/lib/theme";
 import type { NewSessionSheetProps } from "@/screens/(authenticated)/hooks/useNewSession";
+
+const EMBER_TINT = "rgba(240,101,58,0.12)";
 
 export function NewSessionSheet({
 	isPresented,
@@ -15,6 +19,8 @@ export function NewSessionSheet({
 	workspaces,
 	onSelectWorkspace,
 	isCreating,
+	agentType,
+	onSelectAgentType,
 	width,
 }: NewSessionSheetProps) {
 	const theme = useTheme();
@@ -49,7 +55,44 @@ export function NewSessionSheet({
 									/>
 								) : null}
 							</View>
-							<ScrollView style={{ maxHeight: 320 }}>
+
+							{/* Agent runtime picker — discreet groundwork for launching
+							    Codex/Gemini/… directly (not yet sent to the backend). */}
+							<Text
+								className="mb-1.5 text-xs font-medium uppercase tracking-wide"
+								style={{ color: theme.mutedForeground }}
+							>
+								Agent
+							</Text>
+							<ScrollView
+								horizontal
+								showsHorizontalScrollIndicator={false}
+								contentContainerStyle={{ gap: 8, paddingBottom: 12 }}
+							>
+								{AGENT_TYPE_PRESETS.map((preset) => {
+									const active = preset.id === agentType;
+									return (
+										<Pressable
+											key={preset.id}
+											onPress={() => onSelectAgentType(preset.id)}
+											className="rounded-full border px-3 py-1.5"
+											style={{
+												borderColor: active ? EMBER : theme.border,
+												backgroundColor: active ? EMBER_TINT : "transparent",
+											}}
+										>
+											<Text
+												className="text-sm font-medium"
+												style={{ color: active ? EMBER : theme.foreground }}
+											>
+												{preset.label}
+											</Text>
+										</Pressable>
+									);
+								})}
+							</ScrollView>
+
+							<ScrollView style={{ maxHeight: 280 }}>
 								{workspaces.map((workspace) => (
 									<Pressable
 										key={workspace.id}

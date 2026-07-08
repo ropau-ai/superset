@@ -6,6 +6,7 @@ import { ScrollView, View } from "react-native";
 import { Icon } from "@/components/ui/icon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Text } from "@/components/ui/text";
+import { useAgentTokens } from "@/hooks/useAgentTokens";
 import { useSession } from "@/lib/auth/client";
 import { buildHostRoutingKey, isRelayConfigured } from "@/lib/relay/relay";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
@@ -37,6 +38,8 @@ export function SessionDetailScreen() {
 	const organizationId = authData?.session?.activeOrganizationId ?? null;
 	const now = useNow(1000);
 	const [tab, setTab] = useState<LiveTab>("terminal");
+	// Session token total; `null` until a live usage source exists (see hook).
+	const tokens = useAgentTokens({ sessionId: id ?? null });
 
 	const { data: sessions, isReady: sessionsReady } = useLiveQuery(
 		(q) => q.from({ chatSessions: collections.chatSessions }),
@@ -119,6 +122,7 @@ export function SessionDetailScreen() {
 						startedAt={session.createdAt}
 						status={status}
 						title={session.title ?? "Untitled session"}
+						tokens={tokens}
 						workspaceName={workspace?.name ?? "No workspace"}
 					/>
 
@@ -126,6 +130,7 @@ export function SessionDetailScreen() {
 						bindings={activity.bindings}
 						now={now}
 						phase={activity.phase}
+						sessionId={id ?? null}
 					/>
 
 					<Tabs

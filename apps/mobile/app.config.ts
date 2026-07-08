@@ -33,7 +33,7 @@ export default ({ config }: ConfigContext) => ({
 	android: {
 		adaptiveIcon: {
 			foregroundImage: "./assets/adaptive-icon.png",
-			backgroundColor: "#ffffff",
+			backgroundColor: "#0B0B0F",
 		},
 		package: "sh.superset.mobile",
 		predictiveBackGestureEnabled: false,

@@ -2,9 +2,12 @@ import { formatDistanceToNow } from "date-fns";
 import { Bot, Users } from "lucide-react-native";
 import { useMemo } from "react";
 import { View } from "react-native";
+import { AgentTypeChip } from "@/components/AgentTypeChip";
+import { TokenBadge } from "@/components/TokenBadge";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Text } from "@/components/ui/text";
+import { useAgentTokens } from "@/hooks/useAgentTokens";
 import type { TerminalAgentBinding } from "@/lib/relay/relay";
 import { cn } from "@/lib/utils";
 import { type LiveAgentStatusKind, statusForBinding } from "../../agentStatus";
@@ -63,6 +66,8 @@ function SubAgentRow({
 	const status = statusForBinding(binding, now);
 	const tint = AVATAR_TINT[status.kind];
 	const name = resolveName(binding);
+	// Per-sub-run usage. `null` today (no live source) → badge renders "— tok".
+	const tokens = useAgentTokens({ agentId: binding.agentId });
 	const lastActive =
 		typeof binding.lastEventAt === "number"
 			? formatDistanceToNow(new Date(binding.lastEventAt), { addSuffix: true })
@@ -80,17 +85,29 @@ function SubAgentRow({
 			</View>
 
 			<View className="flex-1 gap-0.5">
-				<Text
-					className={cn("font-medium", name.mono && "font-mono text-sm")}
-					numberOfLines={1}
-				>
-					{name.label}
-				</Text>
-				{lastActive ? (
-					<Text className="text-muted-foreground text-xs" numberOfLines={1}>
-						active {lastActive}
+				<View className="flex-row items-center gap-2">
+					<Text
+						className={cn(
+							"shrink font-medium",
+							name.mono && "font-mono text-sm",
+						)}
+						numberOfLines={1}
+					>
+						{name.label}
 					</Text>
-				) : null}
+					<AgentTypeChip definitionId={binding.definitionId} />
+				</View>
+				<View className="flex-row items-center gap-2">
+					{lastActive ? (
+						<Text className="text-muted-foreground text-xs" numberOfLines={1}>
+							active {lastActive}
+						</Text>
+					) : null}
+					{lastActive ? (
+						<Text className="text-muted-foreground text-xs">·</Text>
+					) : null}
+					<TokenBadge tokens={tokens} />
+				</View>
 			</View>
 
 			<AgentStatusBadge kind={status.kind} label={status.label} />
@@ -98,7 +115,13 @@ function SubAgentRow({
 	);
 }
 
-function PanelHeader({ count }: { count: number | null }) {
+function PanelHeader({
+	count,
+	tokens,
+}: {
+	count: number | null;
+	tokens: ReturnType<typeof useAgentTokens>;
+}) {
 	return (
 		<View className="flex-row items-center justify-between">
 			<View className="flex-row items-center gap-2">
@@ -109,11 +132,14 @@ function PanelHeader({ count }: { count: number | null }) {
 				/>
 				<Text className="font-semibold">Agents</Text>
 			</View>
-			{count != null ? (
-				<Text className="text-muted-foreground text-xs">
-					{count} {count === 1 ? "agent" : "agents"}
-				</Text>
-			) : null}
+			<View className="flex-row items-center gap-2.5">
+				<TokenBadge tokens={tokens} />
+				{count != null ? (
+					<Text className="text-muted-foreground text-xs">
+						{count} {count === 1 ? "agent" : "agents"}
+					</Text>
+				) : null}
+			</View>
 		</View>
 	);
 }
@@ -138,6 +164,8 @@ export interface SubAgentsPanelProps {
 	now: number;
 	/** Relay poll phase; drives the discreet loading skeleton. */
 	phase?: AgentActivityPhase;
+	/** Session id, for the panel-header token total (renders "—" until wired). */
+	sessionId?: string | null;
 	className?: string;
 }
 
@@ -155,8 +183,11 @@ export function SubAgentsPanel({
 	bindings,
 	now,
 	phase,
+	sessionId,
 	className,
 }: SubAgentsPanelProps) {
+	// Session-total usage for the panel header. `null` today → header shows "—".
+	const sessionTokens = useAgentTokens({ sessionId });
 	const sorted = useMemo(() => {
 		const list = bindings ?? [];
 		return [...list].sort(
@@ -169,7 +200,7 @@ export function SubAgentsPanel({
 		if (phase === "loading") {
 			return (
 				<View className={cn("gap-3", className)}>
-					<PanelHeader count={null} />
+					<PanelHeader count={null} tokens={sessionTokens} />
 					<SkeletonRow />
 					<SkeletonRow />
 				</View>
@@ -180,7 +211,7 @@ export function SubAgentsPanel({
 
 	return (
 		<View className={cn("gap-3", className)}>
-			<PanelHeader count={sorted.length} />
+			<PanelHeader count={sorted.length} tokens={sessionTokens} />
 			<View className="gap-2">
 				{sorted.map((binding) => (
 					<SubAgentRow
