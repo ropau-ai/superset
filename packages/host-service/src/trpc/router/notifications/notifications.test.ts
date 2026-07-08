@@ -3,7 +3,14 @@ import type { AgentIdentity } from "@superset/shared/agent-identity";
 import type { AgentLifecycleEventType } from "../../../events";
 import { TerminalAgentStore } from "../../../terminal-agents";
 import type { HostServiceContext } from "../../../types";
+import {
+	deterministicSessionId,
+	forgetMirroredTerminal,
+} from "./mirror-terminal-session";
 import { notificationsRouter } from "./notifications";
+
+// Flush the fire-and-forget mirror IIFE (createSession → updateSession).
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 interface BroadcastedAgentLifecycleEvent {
 	workspaceId: string;
@@ -20,6 +27,8 @@ function createContext(originWorkspaceId: string | null): {
 	>;
 	findFirst: ReturnType<typeof mock>;
 	terminalAgentStore: TerminalAgentStore;
+	createSession: ReturnType<typeof mock>;
+	updateSession: ReturnType<typeof mock>;
 } {
 	const broadcastAgentLifecycle = mock(
 		(_event: BroadcastedAgentLifecycleEvent) => {},
@@ -33,6 +42,8 @@ function createContext(originWorkspaceId: string | null): {
 					},
 	}));
 	const terminalAgentStore = new TerminalAgentStore();
+	const createSession = mock(async () => ({ sessionId: "x", txid: null }));
+	const updateSession = mock(async () => ({ updated: true }));
 
 	const ctx = {
 		db: {
@@ -46,9 +57,22 @@ function createContext(originWorkspaceId: string | null): {
 			broadcastAgentLifecycle,
 		},
 		terminalAgentStore,
+		api: {
+			chat: {
+				createSession: { mutate: createSession },
+				updateSession: { mutate: updateSession },
+			},
+		},
 	} as unknown as HostServiceContext;
 
-	return { ctx, broadcastAgentLifecycle, findFirst, terminalAgentStore };
+	return {
+		ctx,
+		broadcastAgentLifecycle,
+		findFirst,
+		terminalAgentStore,
+		createSession,
+		updateSession,
+	};
 }
 
 describe("notificationsRouter.hook", () => {
@@ -168,5 +192,94 @@ describe("notificationsRouter.hook", () => {
 
 		const broadcast = broadcastAgentLifecycle.mock.calls[0]?.[0];
 		expect(broadcast?.agent).toBeUndefined();
+	});
+
+	it("mirrors a live terminal agent into chat_sessions (id, workspace, title)", async () => {
+		const terminalId = "term-mirror-a";
+		forgetMirroredTerminal(terminalId);
+		const { ctx, createSession, updateSession } = createContext("workspace-9");
+
+		await notificationsRouter.createCaller(ctx).hook({
+			terminalId,
+			eventType: "SessionStart",
+			agent: { agentId: "claude", sessionId: "cli-session-1" },
+		});
+
+		expect(createSession).toHaveBeenCalledTimes(1);
+		expect(createSession.mock.calls[0]?.[0]).toEqual({
+			sessionId: deterministicSessionId(terminalId),
+			v2WorkspaceId: "workspace-9",
+		});
+
+		await flush();
+		expect(updateSession).toHaveBeenCalledTimes(1);
+		expect(updateSession.mock.calls[0]?.[0]).toEqual({
+			sessionId: deterministicSessionId(terminalId),
+			title: "Claude",
+		});
+	});
+
+	it("does not create a duplicate row on repeated Start events", async () => {
+		const terminalId = "term-mirror-b";
+		forgetMirroredTerminal(terminalId);
+		const { ctx, createSession } = createContext("workspace-9");
+		const caller = notificationsRouter.createCaller(ctx);
+
+		await caller.hook({
+			terminalId,
+			eventType: "SessionStart",
+			agent: { agentId: "claude" },
+		});
+		await caller.hook({
+			terminalId,
+			eventType: "UserPromptSubmit",
+			agent: { agentId: "claude" },
+		});
+		await caller.hook({
+			terminalId,
+			eventType: "Stop",
+			agent: { agentId: "claude" },
+		});
+		await flush();
+
+		expect(createSession).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not mirror when no agent is bound to the terminal", async () => {
+		const terminalId = "term-mirror-c";
+		forgetMirroredTerminal(terminalId);
+		const { ctx, createSession } = createContext("workspace-9");
+
+		// No agentId and no prior binding → the store records nothing, so there
+		// is no live agent to mirror.
+		await notificationsRouter.createCaller(ctx).hook({
+			terminalId,
+			eventType: "Stop",
+		});
+		await flush();
+
+		expect(createSession).not.toHaveBeenCalled();
+	});
+
+	it("re-mirrors after the terminal detaches and a new agent attaches", async () => {
+		const terminalId = "term-mirror-d";
+		forgetMirroredTerminal(terminalId);
+		const { ctx, createSession } = createContext("workspace-9");
+		const caller = notificationsRouter.createCaller(ctx);
+
+		await caller.hook({
+			terminalId,
+			eventType: "SessionStart",
+			agent: { agentId: "claude" },
+		});
+		await caller.hook({ terminalId, eventType: "SessionEnd" }); // Detached → binding gone
+		await caller.hook({
+			terminalId,
+			eventType: "SessionStart",
+			agent: { agentId: "claude" },
+		});
+		await flush();
+
+		expect(createSession).toHaveBeenCalledTimes(2);
 	});
 });

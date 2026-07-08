@@ -4,6 +4,10 @@ import { z } from "zod";
 import { terminalSessions } from "../../../db/schema";
 import { mapEventType } from "../../../events";
 import { publicProcedure, router } from "../../index";
+import {
+	forgetMirroredTerminal,
+	mirrorTerminalSessionToCloud,
+} from "./mirror-terminal-session";
 
 // Hook scripts emit "" for unset env vars; we coerce to undefined so the
 // AgentIdentity broadcast carries only meaningful fields.
@@ -91,6 +95,23 @@ export const notificationsRouter = router({
 			...(agent?.definitionId ? { definitionId: agent.definitionId } : {}),
 			occurredAt,
 		});
+
+		// Mirror live terminal/CLI agents into the synced `chat_sessions` table so
+		// they appear in the mobile Sessions list (which is an Electric shape over
+		// that table). Only the chat agent wrote this row before, so `claude` CLI
+		// sessions were invisible on mobile. The store is the source of truth for
+		// "is an agent live in this terminal": a binding now present means mirror
+		// it; a binding gone (Detached/exit) means release the dedupe marker.
+		const binding = ctx.terminalAgentStore.get(input.terminalId);
+		if (binding) {
+			mirrorTerminalSessionToCloud(ctx, {
+				terminalId: input.terminalId,
+				workspaceId: terminalSession.originWorkspaceId,
+				agentId: binding.agentId,
+			});
+		} else {
+			forgetMirroredTerminal(input.terminalId);
+		}
 
 		return { success: true, ignored: false as const };
 	}),
