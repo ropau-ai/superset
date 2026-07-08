@@ -5,6 +5,7 @@ import { ThemeProvider } from "expo-router/react-navigation";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Uniwind } from "uniwind";
 import { useSession } from "@/lib/auth/client";
+import { NotificationsProvider } from "@/lib/notifications";
 import { NAV_THEME } from "@/lib/theme";
 
 Uniwind.setTheme("dark");
@@ -24,14 +25,16 @@ export function RootLayout() {
 			<QueryClientProvider client={queryClient}>
 				<PostHogProvider>
 					<ThemeProvider value={NAV_THEME.dark}>
-						<Stack screenOptions={{ headerShown: false }}>
-							<Stack.Protected guard={!!session}>
-								<Stack.Screen name="(authenticated)" />
-							</Stack.Protected>
-							<Stack.Protected guard={!session}>
-								<Stack.Screen name="(auth)" />
-							</Stack.Protected>
-						</Stack>
+						<NotificationsProvider>
+							<Stack screenOptions={{ headerShown: false }}>
+								<Stack.Protected guard={!!session}>
+									<Stack.Screen name="(authenticated)" />
+								</Stack.Protected>
+								<Stack.Protected guard={!session}>
+									<Stack.Screen name="(auth)" />
+								</Stack.Protected>
+							</Stack>
+						</NotificationsProvider>
 						<PostHogUserIdentifier />
 						<PortalHost />
 					</ThemeProvider>

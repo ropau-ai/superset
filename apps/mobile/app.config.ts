@@ -42,7 +42,7 @@ export default ({ config }: ConfigContext) => ({
 		favicon: "./assets/favicon.png",
 		bundler: "metro",
 	},
-	plugins: ["expo-router", "expo-localization"],
+	plugins: ["expo-router", "expo-localization", "expo-notifications"],
 	extra: {
 		router: {},
 		eas: {
