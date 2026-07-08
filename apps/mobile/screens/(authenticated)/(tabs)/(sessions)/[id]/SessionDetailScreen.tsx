@@ -13,6 +13,7 @@ import { deriveAgentStatus, type LiveAgentStatus } from "./agentStatus";
 import { ActivityFeed } from "./components/ActivityFeed";
 import { LiveSessionHeader } from "./components/LiveSessionHeader";
 import { LiveTerminal } from "./components/LiveTerminal";
+import { SubAgentsPanel } from "./components/SubAgentsPanel";
 import { useAgentActivity } from "./hooks/useAgentActivity";
 import { useSessionActivity } from "./hooks/useSessionActivity";
 import { useTerminalStream } from "./hooks/useTerminalStream";
@@ -119,6 +120,12 @@ export function SessionDetailScreen() {
 						status={status}
 						title={session.title ?? "Untitled session"}
 						workspaceName={workspace?.name ?? "No workspace"}
+					/>
+
+					<SubAgentsPanel
+						bindings={activity.bindings}
+						now={now}
+						phase={activity.phase}
 					/>
 
 					<Tabs
