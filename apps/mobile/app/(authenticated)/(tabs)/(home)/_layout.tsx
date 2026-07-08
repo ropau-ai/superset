@@ -8,7 +8,9 @@ export default function HomeLayout() {
 				headerShadowVisible: false,
 			}}
 		>
-			<Stack.Screen name="index" options={{ title: "" }} />
+			{/* The Emilien cockpit renders its own header. */}
+			<Stack.Screen name="index" options={{ headerShown: false }} />
+			<Stack.Screen name="workspaces" options={{ title: "Workspaces" }} />
 		</Stack>
 	);
 }
