@@ -4,6 +4,16 @@ import {
 	type Theme,
 } from "expo-router/react-navigation";
 
+/**
+ * Emilien / Ropau signature accent — one warm orange, used for the live pulse,
+ * the brand mark, and status accents. Kept as an exact hex constant so brand
+ * elements render the precise color inline (SVG fills, animated dots), while the
+ * `--color-ember` CSS token (see global.css) backs the `text-ember` / `bg-ember`
+ * utility classes for tints. One accent only — no chromatic carnival.
+ */
+export const EMBER = "#F0653A";
+export const EMBER_FOREGROUND = "#FFFFFF";
+
 export const THEME = {
 	light: {
 		background: "hsl(0 0% 100%)",
@@ -21,6 +31,8 @@ export const THEME = {
 		accent: "hsl(0 0% 96.1%)",
 		accentForeground: "hsl(0 0% 9%)",
 		destructive: "hsl(0 84.2% 60.2%)",
+		ember: "hsl(14 86% 58%)",
+		emberForeground: "hsl(0 0% 100%)",
 		border: "hsl(0 0% 89.8%)",
 		input: "hsl(0 0% 89.8%)",
 		ring: "hsl(0 0% 63%)",
@@ -47,6 +59,8 @@ export const THEME = {
 		accent: "hsl(0 0% 14.9%)",
 		accentForeground: "hsl(0 0% 98%)",
 		destructive: "hsl(0 70.9% 59.4%)",
+		ember: "hsl(14 86% 58%)",
+		emberForeground: "hsl(0 0% 100%)",
 		border: "hsl(0 0% 14.9%)",
 		input: "hsl(0 0% 14.9%)",
 		ring: "hsl(300 0% 45%)",
