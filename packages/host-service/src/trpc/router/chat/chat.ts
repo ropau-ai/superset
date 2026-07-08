@@ -54,6 +54,14 @@ export const chatRouter = router({
 			return ctx.runtime.chat.getSnapshot(input);
 		}),
 
+	// Real cumulative token usage for the session, or `null` when no runtime is
+	// live for it (see ChatRuntimeManager.getSessionTokenUsage). Never fabricated.
+	getTokenUsage: protectedProcedure
+		.input(sessionInput)
+		.query(({ ctx, input }) => {
+			return ctx.runtime.chat.getSessionTokenUsage(input);
+		}),
+
 	sendMessage: protectedProcedure
 		.input(
 			sessionInput.extend({

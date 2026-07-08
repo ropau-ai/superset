@@ -7,7 +7,7 @@ import { TokenBadge } from "@/components/TokenBadge";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Text } from "@/components/ui/text";
-import { useAgentTokens } from "@/hooks/useAgentTokens";
+import type { AgentTokens } from "@/hooks/useAgentTokens";
 import type { TerminalAgentBinding } from "@/lib/relay/relay";
 import { cn } from "@/lib/utils";
 import { type LiveAgentStatusKind, statusForBinding } from "../../agentStatus";
@@ -66,8 +66,6 @@ function SubAgentRow({
 	const status = statusForBinding(binding, now);
 	const tint = AVATAR_TINT[status.kind];
 	const name = resolveName(binding);
-	// Per-sub-run usage. `null` today (no live source) → badge renders "— tok".
-	const tokens = useAgentTokens({ agentId: binding.agentId });
 	const lastActive =
 		typeof binding.lastEventAt === "number"
 			? formatDistanceToNow(new Date(binding.lastEventAt), { addSuffix: true })
@@ -106,7 +104,9 @@ function SubAgentRow({
 					{lastActive ? (
 						<Text className="text-muted-foreground text-xs">·</Text>
 					) : null}
-					<TokenBadge tokens={tokens} />
+					{/* No clean per-terminal-agent usage source (interactive PTY, hook
+					    events carry none) → honest "—", never a fabricated number. */}
+					<TokenBadge tokens={null} />
 				</View>
 			</View>
 
@@ -120,7 +120,7 @@ function PanelHeader({
 	tokens,
 }: {
 	count: number | null;
-	tokens: ReturnType<typeof useAgentTokens>;
+	tokens: AgentTokens | null;
 }) {
 	return (
 		<View className="flex-row items-center justify-between">
@@ -164,8 +164,8 @@ export interface SubAgentsPanelProps {
 	now: number;
 	/** Relay poll phase; drives the discreet loading skeleton. */
 	phase?: AgentActivityPhase;
-	/** Session id, for the panel-header token total (renders "—" until wired). */
-	sessionId?: string | null;
+	/** Real session-total usage for the panel header (from the screen's poll). */
+	sessionTokens?: AgentTokens | null;
 	className?: string;
 }
 
@@ -183,11 +183,9 @@ export function SubAgentsPanel({
 	bindings,
 	now,
 	phase,
-	sessionId,
+	sessionTokens = null,
 	className,
 }: SubAgentsPanelProps) {
-	// Session-total usage for the panel header. `null` today → header shows "—".
-	const sessionTokens = useAgentTokens({ sessionId });
 	const sorted = useMemo(() => {
 		const list = bindings ?? [];
 		return [...list].sort(
