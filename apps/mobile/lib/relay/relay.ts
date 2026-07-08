@@ -136,3 +136,83 @@ export function listWorkspaceAgents(routingKey: string, workspaceId: string) {
 		"GET",
 	);
 }
+
+// --- Rich agent activity (chat runtime messages) --------------------------
+//
+// The agent's real per-tool activity (bash commands, file diffs, commits,
+// tool-use) is NOT a synced DB table — it lives in the host's mastracode
+// harness thread, exposed by the host-service `chat.listMessages` tRPC
+// procedure and reachable over the SAME relay path as the terminal + agent
+// calls above. `agent_commands` (the one Electric table that sounds right) is a
+// device command-dispatch queue with no session link, so it can't feed a
+// per-session timeline. Hence: relay poll, not Electric. Parts are hand-typed
+// at the boundary (mirroring apps/desktop's AssistantMessage) rather than
+// importing host-service types, which drag node-only modules into the bundle.
+
+/** One content part of an agent message. `type` discriminates the renderer. */
+export type ChatMessagePart =
+	| { type: "text"; text: string }
+	| { type: "thinking"; thinking: string }
+	| {
+			type: "image";
+			data?: string;
+			image?: string;
+			mimeType?: string;
+			mediaType?: string;
+			filename?: string;
+	  }
+	| {
+			type: "file";
+			data?: string;
+			filename?: string;
+			mediaType?: string;
+			mimeType?: string;
+	  }
+	| {
+			type: "tool_call";
+			id: string;
+			name: string;
+			args?: Record<string, unknown>;
+	  }
+	| {
+			type: "tool_result";
+			id: string;
+			name?: string;
+			result?: unknown;
+			isError?: boolean;
+	  }
+	// `om_*` and any future part types fall through to a tolerant catch-all so
+	// an unknown shape degrades to a fallback row instead of crashing.
+	| { type: string; [key: string]: unknown };
+
+/** One agent message, as returned by the host `chat.listMessages`. */
+export interface ChatActivityMessage {
+	id: string;
+	role: "user" | "assistant" | string;
+	content: ChatMessagePart[];
+	createdAt?: Date | string;
+	stopReason?: string;
+	errorMessage?: string;
+}
+
+/**
+ * List the rich agent activity (assistant + user messages, each with its tool
+ * parts) for a live session on its host. `sessionId` is the `chat_sessions.id`
+ * (the route param) and `workspaceId` is the session's `v2WorkspaceId` — the
+ * same workspace id the terminal/agent relay calls already use. The host lazily
+ * (re)creates the runtime to read its persisted thread, so this can throw when
+ * the host has no model credentials or the session has never started; callers
+ * surface that as an error state rather than crashing.
+ */
+export function listSessionMessages(
+	routingKey: string,
+	sessionId: string,
+	workspaceId: string,
+) {
+	return hostTrpcCall<ChatActivityMessage[]>(
+		routingKey,
+		"chat.listMessages",
+		{ sessionId, workspaceId },
+		"GET",
+	);
+}
