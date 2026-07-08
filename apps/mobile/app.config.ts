@@ -42,7 +42,23 @@ export default ({ config }: ConfigContext) => ({
 		favicon: "./assets/favicon.png",
 		bundler: "metro",
 	},
-	plugins: ["expo-router", "expo-localization", "expo-notifications"],
+	plugins: [
+		"expo-router",
+		"expo-localization",
+		"expo-notifications",
+		[
+			"expo-speech-recognition",
+			{
+				microphonePermission:
+					"Autorise Emilien à utiliser le micro pour dicter tes messages.",
+				speechRecognitionPermission:
+					"Autorise Emilien à transcrire ta voix en texte.",
+				androidSpeechServicePackages: [
+					"com.google.android.googlequicksearchbox",
+				],
+			},
+		],
+	],
 	extra: {
 		router: {},
 		eas: {
