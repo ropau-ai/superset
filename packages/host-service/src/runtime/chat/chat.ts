@@ -82,6 +82,19 @@ export type ChatDisplayState = RuntimeDisplayState & {
 	errorMessage: string | null;
 };
 
+/**
+ * Cumulative token usage for a chat session, distilled from the mastracode
+ * harness's own `getTokenUsage()`. These are the real model-reported counts the
+ * harness accumulates per turn and persists to the thread metadata (so they
+ * survive a runtime re-attach) — never fabricated. `input`/`output` are `null`
+ * only when the harness omits that breakdown.
+ */
+export interface SessionTokenUsage {
+	total: number;
+	input: number | null;
+	output: number | null;
+}
+
 interface ChatApprovalPayload {
 	decision: "approve" | "decline" | "always_allow_category";
 }
@@ -641,6 +654,37 @@ When you need to ask the user ANY question — including simple yes/no, confirma
 			input.workspaceId,
 		);
 		return runtime.harness.listMessages();
+	}
+
+	/**
+	 * Cumulative token usage for a session, read straight from the harness's
+	 * persisted+restored counter. Deliberately reads ONLY an already-live
+	 * runtime (never `getOrCreateRuntime`): spinning up a full mastracode
+	 * runtime just to read a token counter would be wasteful and could stampede
+	 * the host when a fleet of unopened sessions is listed. So a session with no
+	 * live runtime honestly reports `null` (the UI renders "—") rather than a
+	 * fabricated or misleadingly-zero number. Screens that display real numbers
+	 * (the pinned Emilien card, an open session detail) already keep the runtime
+	 * live via their message poll, so their usage is present and accurate.
+	 */
+	getSessionTokenUsage(input: {
+		sessionId: string;
+		workspaceId: string;
+	}): SessionTokenUsage | null {
+		const runtime = this.runtimes.get(input.sessionId);
+		if (!runtime || runtime.workspaceId !== input.workspaceId) return null;
+
+		const usage = runtime.harness.getTokenUsage();
+		if (!usage) return null;
+
+		const total = Number.isFinite(usage.totalTokens) ? usage.totalTokens : 0;
+		const input_ = Number.isFinite(usage.promptTokens)
+			? usage.promptTokens
+			: null;
+		const output = Number.isFinite(usage.completionTokens)
+			? usage.completionTokens
+			: null;
+		return { total, input: input_, output };
 	}
 
 	/**

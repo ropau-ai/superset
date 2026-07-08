@@ -218,6 +218,38 @@ export function listSessionMessages(
 }
 
 /**
+ * Cumulative token usage for a session, as returned by the host
+ * `chat.getTokenUsage`. `null` when the host has no live runtime for the session
+ * (nothing to sum yet) — the UI renders "—" rather than a fabricated count.
+ * `input`/`output` are `null` when the model omits that breakdown.
+ */
+export interface SessionTokenUsage {
+	total: number;
+	input: number | null;
+	output: number | null;
+}
+
+/**
+ * Read the real cumulative token usage for a live session on its host. Mirrors
+ * `listSessionMessages`'s relay path and args (`sessionId` = `chat_sessions.id`,
+ * `workspaceId` = the session's `v2WorkspaceId`). The host reads its live
+ * mastracode harness counter and returns `null` when no runtime is currently
+ * attached to the session, so callers surface "—" instead of a guessed number.
+ */
+export function getSessionTokenUsage(
+	routingKey: string,
+	sessionId: string,
+	workspaceId: string,
+) {
+	return hostTrpcCall<SessionTokenUsage | null>(
+		routingKey,
+		"chat.getTokenUsage",
+		{ sessionId, workspaceId },
+		"GET",
+	);
+}
+
+/**
  * Send a user message to a live session's agent via the host `chat.sendMessage`
  * mutation over the relay — the same path the desktop/web composer uses. The
  * host queues the turn and updates the cloud `lastActiveAt`; the reply streams

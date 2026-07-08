@@ -135,8 +135,13 @@ export function CockpitScreen() {
 		emilienActivity.bindings,
 		now,
 	]);
+	// Real cumulative usage for Emilien's session, polled over the relay. Emilien
+	// runs 24/7 so its host runtime stays live → the card shows a running total.
 	const emilienTokens = useAgentTokens({
 		sessionId: emilien.session?.id ?? null,
+		workspaceId: emilien.workspace?.id ?? null,
+		routingKey: emilienRoutingKey,
+		enabled: emilienRelayReady,
 	});
 
 	// --- Fleet: every non-Emilien session, grouped by workspace -------------

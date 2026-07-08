@@ -7,7 +7,6 @@ import { LivePulseDot } from "@/components/LivePulseDot";
 import { TokenBadge } from "@/components/TokenBadge";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
-import { useAgentTokens } from "@/hooks/useAgentTokens";
 import type { LiveAgentStatus } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
 import { AgentStatusBadge } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/AgentStatusBadge";
 
@@ -45,8 +44,6 @@ function FleetRow({
 	now: number;
 	onPress: () => void;
 }) {
-	// Per-sub-run usage — `null` today (no live source) → "— tok".
-	const tokens = useAgentTokens({ sessionId: session.id });
 	const at = activeAt(session);
 	const hot = now - at.getTime() < HOT_WINDOW_MS;
 
@@ -65,7 +62,9 @@ function FleetRow({
 						{formatDistanceToNow(at, { addSuffix: true })}
 					</Text>
 					<Text className="text-muted-foreground text-xs">·</Text>
-					<TokenBadge tokens={tokens} />
+					{/* A fleet row's session isn't open, so the host has no live
+					    runtime to sum — honest "—" (real usage shows once opened). */}
+					<TokenBadge tokens={null} />
 				</View>
 			</View>
 			<Icon

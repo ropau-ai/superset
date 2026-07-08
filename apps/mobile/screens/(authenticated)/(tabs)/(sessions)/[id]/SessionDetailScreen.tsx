@@ -38,8 +38,6 @@ export function SessionDetailScreen() {
 	const organizationId = authData?.session?.activeOrganizationId ?? null;
 	const now = useNow(1000);
 	const [tab, setTab] = useState<LiveTab>("terminal");
-	// Session token total; `null` until a live usage source exists (see hook).
-	const tokens = useAgentTokens({ sessionId: id ?? null });
 
 	const { data: sessions, isReady: sessionsReady } = useLiveQuery(
 		(q) => q.from({ chatSessions: collections.chatSessions }),
@@ -74,6 +72,15 @@ export function SessionDetailScreen() {
 			: null;
 	const relayReady =
 		relayConfigured && hostOnline === true && !!routingKey && !!workspaceId;
+
+	// Real session-total token usage, polled from the host mastracode harness
+	// over the relay; `null` (→ "—") until the host has a live runtime for it.
+	const tokens = useAgentTokens({
+		sessionId: id ?? null,
+		workspaceId,
+		routingKey,
+		enabled: relayReady,
+	});
 
 	const activity = useAgentActivity({
 		routingKey,
@@ -130,7 +137,7 @@ export function SessionDetailScreen() {
 						bindings={activity.bindings}
 						now={now}
 						phase={activity.phase}
-						sessionId={id ?? null}
+						sessionTokens={tokens}
 					/>
 
 					<Tabs

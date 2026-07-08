@@ -1,22 +1,19 @@
-// Token usage per agent run / session — see the Cockpit spec §TOKENS.
+import { useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
+import { getSessionTokenUsage } from "@/lib/relay/relay";
+
+// Token usage per session — see the Cockpit spec §TOKENS.
 //
-// AUDIT (2026-07-08): there is NO live token/usage source anywhere the mobile
-// app can read. Not in the relay `chat.listMessages` payload (ChatActivityMessage
-// carries no usage field), not in `terminalAgents.listByWorkspace` bindings
-// (TerminalAgentBinding has none), not in the Electric-synced chat_sessions /
-// v2_* tables, and the host-service never emits usage. So this hook returns
-// `null` today and every token surface renders a clean "—" — NEVER a fabricated
-// number.
-//
-// TODO(backend): once the host surfaces usage, wire it here in ONE place and
-// every badge (fleet rows, SubAgentsPanel, session/chat headers) lights up.
-// Two likely shapes to plumb through the relay:
-//   1. add `usage?: { inputTokens; outputTokens; totalTokens }` to
-//      ChatActivityMessage (host `chat.listMessages`) and sum per session; or
-//   2. add a `usage` field to TerminalAgentBinding
-//      (host `terminalAgents.listByWorkspace`) for per-agent totals.
-// Then replace `resolveTokens()` below with the summed values and the whole UI
-// becomes live with no component changes.
+// SOURCE (2026-07-08): the mastracode chat harness on the host tracks real,
+// model-reported cumulative token usage per thread and persists it to the
+// thread metadata (so it survives a runtime re-attach). The host-service now
+// exposes it over the relay as `chat.getTokenUsage`, and this hook polls it —
+// so a session with a live runtime (the pinned Emilien card, an open session
+// detail) shows its real running total. When the host has no live runtime for
+// the session it returns `null` and every token surface renders a clean "—":
+// we never fabricate a number, and we never spin up a runtime just to read a
+// counter (that's why unopened fleet rows and per-terminal-agent rows, which
+// have no live chat runtime / no clean source, stay "—").
 
 export interface AgentTokens {
 	/** Total tokens across the run (input + output + cache). */
@@ -28,27 +25,78 @@ export interface AgentTokens {
 }
 
 export interface UseAgentTokensArgs {
-	/** Sum usage across a chat session's messages, when a source exists. */
+	/** The chat session whose cumulative usage to read (`chat_sessions.id`). */
 	sessionId?: string | null;
-	/** Or a single agent binding's usage, when a source exists. */
+	/** The session's `v2WorkspaceId` — required to reach the host runtime. */
+	workspaceId?: string | null;
+	/** Relay routing key for the session's host. */
+	routingKey?: string | null;
+	/** Relay reachable (configured + host online) AND the surface is visible. */
+	enabled?: boolean;
+	/**
+	 * A single terminal-agent binding's usage. Kept for the SubAgentsPanel per-row
+	 * badge, but there is no clean per-terminal-agent usage source today (the CLI
+	 * agents run in an interactive PTY and the hook events carry no usage), so this
+	 * path always resolves to `null` → "—". Never fabricated.
+	 */
 	agentId?: string | null;
 }
 
-// Single seam the backend wiring plugs into. Returns `null` until a real usage
-// source lands — see the file header for the exact fields to sum.
-function resolveTokens(_args: UseAgentTokensArgs): AgentTokens | null {
-	return null;
-}
+// A few seconds is plenty: usage only moves when the agent finishes a turn, and
+// the phone is battery-constrained. Mirrors the session-activity poll cadence.
+const POLL_INTERVAL_MS = 4_000;
 
 /**
- * Token usage for a session or a sub-agent run. Returns `null` when no live
- * usage source is reachable (the case today) so callers render "—" rather than
- * inventing a number. Pure + synchronous: it's a formatting seam, not a fetch.
+ * Real cumulative token usage for a chat session, polled from the host over the
+ * relay. Returns `null` — so callers render "—" — until a live source is
+ * reachable (relay configured, host online, session has a live runtime). The
+ * single seam every token badge reads through: fleet rows, SubAgentsPanel, and
+ * session/chat headers all flow through here.
  */
 export function useAgentTokens(
 	args: UseAgentTokensArgs = {},
 ): AgentTokens | null {
-	return resolveTokens(args);
+	const { sessionId, workspaceId, routingKey, enabled = true } = args;
+	const [tokens, setTokens] = useState<AgentTokens | null>(null);
+	const activeRef = useRef(true);
+
+	useEffect(() => {
+		activeRef.current = true;
+		if (!enabled || !routingKey || !sessionId || !workspaceId) {
+			setTokens(null);
+			return;
+		}
+
+		const poll = async () => {
+			if (!activeRef.current) return;
+			if (AppState.currentState !== "active") return;
+			try {
+				const usage = await getSessionTokenUsage(
+					routingKey,
+					sessionId,
+					workspaceId,
+				);
+				if (!activeRef.current) return;
+				setTokens(
+					usage
+						? { total: usage.total, input: usage.input, output: usage.output }
+						: null,
+				);
+			} catch {
+				// Transient relay/host error — keep the last known value rather than
+				// flashing "—"; the next poll recovers.
+			}
+		};
+
+		void poll();
+		const timer = setInterval(poll, POLL_INTERVAL_MS);
+		return () => {
+			activeRef.current = false;
+			clearInterval(timer);
+		};
+	}, [enabled, routingKey, sessionId, workspaceId]);
+
+	return tokens;
 }
 
 /** Compact token label: 842 → "842", 12_400 → "12.4k", 1_200_000 → "1.2M". */
