@@ -5,6 +5,10 @@ import { randomUUID } from "expo-crypto";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Alert, useWindowDimensions } from "react-native";
+import {
+	type AgentTypeId,
+	DEFAULT_AGENT_TYPE,
+} from "@/lib/agentTypes";
 import { apiClient } from "@/lib/trpc/client";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 
@@ -14,6 +18,9 @@ export interface NewSessionSheetProps {
 	workspaces: SelectV2Workspace[];
 	onSelectWorkspace: (workspaceId: string) => void;
 	isCreating: boolean;
+	/** Selected host agent runtime — captured for future multi-agent launch. */
+	agentType: AgentTypeId;
+	onSelectAgentType: (agentType: AgentTypeId) => void;
 	width: number;
 }
 
@@ -30,6 +37,11 @@ export function useNewSession(): {
 	const { width } = useWindowDimensions();
 	const [sheetOpen, setSheetOpen] = useState(false);
 	const [isCreating, setIsCreating] = useState(false);
+	// Selected agent runtime. Paul orchestrates through Emilien today, so this is
+	// discreet groundwork for launching Codex/Gemini/… directly. NOTE: the cloud
+	// `chat.createSession` mutation doesn't accept an agent type yet, so the
+	// selection isn't sent — wire it through once the backend takes it.
+	const [agentType, setAgentType] = useState<AgentTypeId>(DEFAULT_AGENT_TYPE);
 
 	const { data: workspaces } = useLiveQuery(
 		(q) => q.from({ v2Workspaces: collections.v2Workspaces }),
@@ -89,6 +101,8 @@ export function useNewSession(): {
 			workspaces: sortedWorkspaces,
 			onSelectWorkspace: create,
 			isCreating,
+			agentType,
+			onSelectAgentType: setAgentType,
 			width,
 		},
 	};
