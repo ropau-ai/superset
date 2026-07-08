@@ -1,8 +1,10 @@
 import { formatDistanceToNow } from "date-fns";
 import { Circle, Clock, Cloud, CloudOff } from "lucide-react-native";
 import { View } from "react-native";
+import { TokenBadge } from "@/components/TokenBadge";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
+import type { AgentTokens } from "@/hooks/useAgentTokens";
 import type { LiveAgentStatus } from "../../agentStatus";
 import { AgentStatusBadge } from "../AgentStatusBadge";
 
@@ -26,6 +28,8 @@ export interface LiveSessionHeaderProps {
 	lastActiveAt: Date;
 	/** Ticking clock (epoch ms) so the duration updates live. */
 	now: number;
+	/** Session token total; `null` renders "—" until a usage source is wired. */
+	tokens?: AgentTokens | null;
 }
 
 export function LiveSessionHeader({
@@ -36,6 +40,7 @@ export function LiveSessionHeader({
 	startedAt,
 	lastActiveAt,
 	now,
+	tokens = null,
 }: LiveSessionHeaderProps) {
 	const HostIcon = hostOnline === null ? Circle : hostOnline ? Cloud : CloudOff;
 	const hostLabel =
@@ -65,7 +70,7 @@ export function LiveSessionHeader({
 				) : null}
 			</View>
 
-			<View className="flex-row items-center gap-3 pt-0.5">
+			<View className="flex-row flex-wrap items-center gap-x-3 gap-y-2 pt-0.5">
 				<AgentStatusBadge kind={status.kind} label={status.label} />
 				<View className="flex-row items-center gap-1.5">
 					<Icon
@@ -77,6 +82,7 @@ export function LiveSessionHeader({
 						{formatDuration(now - startedAt.getTime())}
 					</Text>
 				</View>
+				<TokenBadge tokens={tokens} />
 			</View>
 
 			<Text className="text-muted-foreground text-xs">
