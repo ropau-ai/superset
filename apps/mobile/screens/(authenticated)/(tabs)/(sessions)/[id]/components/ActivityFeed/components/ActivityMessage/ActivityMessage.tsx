@@ -1,6 +1,6 @@
-import { ImageIcon, PaperclipIcon } from "lucide-react-native";
+import { ImageIcon, PaperclipIcon, Volume2 } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { MessageResponse } from "@/components/ai-elements/message";
 import {
 	Reasoning,
@@ -9,7 +9,10 @@ import {
 } from "@/components/ai-elements/reasoning";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
+import { useTheme } from "@/hooks/useTheme";
 import type { ChatActivityMessage, ChatMessagePart } from "@/lib/relay/relay";
+import { speakableText } from "@/lib/speech/speakableText";
+import { EMBER } from "@/lib/theme";
 import { ActivityToolCall } from "../ActivityToolCall";
 
 function asRecord(part: ChatMessagePart): Record<string, unknown> {
@@ -41,7 +44,20 @@ function findResult(
  * render as a compact prompt bubble for context. Mirrors apps/desktop's
  * AssistantMessage part loop, minus the editor-pane affordances.
  */
-export function ActivityMessage({ message }: { message: ChatActivityMessage }) {
+export interface ActivityMessageProps {
+	message: ChatActivityMessage;
+	/** Id currently spoken aloud — this row shows its speaker button as active. */
+	speakingId?: string | null;
+	/** Provided by the chat only: toggles read-aloud for this assistant message. */
+	onToggleSpeak?: (message: ChatActivityMessage) => void;
+}
+
+export function ActivityMessage({
+	message,
+	speakingId,
+	onToggleSpeak,
+}: ActivityMessageProps) {
+	const theme = useTheme();
 	const isUser = message.role === "user";
 	const content = Array.isArray(message.content) ? message.content : [];
 
@@ -174,5 +190,30 @@ export function ActivityMessage({ message }: { message: ChatActivityMessage }) {
 	}
 
 	if (nodes.length === 0) return null;
+
+	// The chat passes `onToggleSpeak`; the Activity tab doesn't, so no speaker
+	// button appears there. Only offer it when there's prose worth reading aloud.
+	const spokenText = onToggleSpeak ? speakableText(message) : "";
+	if (spokenText) {
+		const isSpeaking = speakingId === message.id;
+		nodes.push(
+			<Pressable
+				accessibilityLabel={isSpeaking ? "Stop reading aloud" : "Read aloud"}
+				accessibilityRole="button"
+				accessibilityState={{ selected: isSpeaking }}
+				className="mt-0.5 size-7 items-center justify-center self-start rounded-full"
+				key="speak"
+				onPress={() => onToggleSpeak?.(message)}
+				style={isSpeaking ? { backgroundColor: `${EMBER}1f` } : undefined}
+			>
+				<Volume2
+					color={isSpeaking ? EMBER : theme.mutedForeground}
+					size={16}
+					strokeWidth={1.75}
+				/>
+			</Pressable>,
+		);
+	}
+
 	return <View className="gap-2">{nodes}</View>;
 }
