@@ -7,6 +7,7 @@ import {
 	TextInput,
 	View,
 } from "react-native";
+import { useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "@/components/ui/text";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
@@ -67,10 +68,13 @@ export function ChatComposer({
 		await start();
 	}, [available, listening, start, stop, value]);
 
-	// A soft radar pulse around the mic while it's listening.
+	// A soft radar pulse around the mic while it's listening — gated behind iOS
+	// "Reduce Motion" (the ember fill already signals the listening state).
+	const reduceMotion = useReducedMotion();
+	const showRadar = listening && !reduceMotion;
 	const pulse = useRef(new Animated.Value(0)).current;
 	useEffect(() => {
-		if (!listening) {
+		if (!showRadar) {
 			pulse.setValue(0);
 			return;
 		}
@@ -83,7 +87,7 @@ export function ChatComposer({
 		);
 		loop.start();
 		return () => loop.stop();
-	}, [listening, pulse]);
+	}, [showRadar, pulse]);
 
 	const micTint = listening
 		? "#FFFFFF"
@@ -101,9 +105,9 @@ export function ChatComposer({
 
 	const voiceHint =
 		status === "denied"
-			? "Autorise le micro dans les Réglages pour dicter."
+			? "Allow microphone access in Settings to dictate."
 			: status === "unavailable" && unavailableHint
-				? "La dictée vocale nécessite une build native (expo run:ios)."
+				? "Voice dictation needs a native build (expo run:ios)."
 				: null;
 
 	return (
@@ -118,13 +122,14 @@ export function ChatComposer({
 					accessibilityRole="button"
 					accessibilityState={{ selected: listening }}
 					className="size-10 items-center justify-center rounded-full"
+					hitSlop={8}
 					onPress={handleMic}
 					style={{
 						backgroundColor: micBackground,
 						opacity: available || listening ? 1 : 0.45,
 					}}
 				>
-					{listening ? (
+					{showRadar ? (
 						<Animated.View
 							pointerEvents="none"
 							style={{
@@ -167,6 +172,7 @@ export function ChatComposer({
 					accessibilityLabel="Send message"
 					className="size-10 items-center justify-center rounded-full"
 					disabled={!canSend}
+					hitSlop={8}
 					onPress={onSend}
 					style={{
 						backgroundColor: canSend ? EMBER : theme.muted,

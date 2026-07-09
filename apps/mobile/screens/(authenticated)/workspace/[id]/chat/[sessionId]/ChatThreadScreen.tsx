@@ -2,13 +2,7 @@ import { useLiveQuery } from "@tanstack/react-db";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { Volume2, VolumeX } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-	Alert,
-	KeyboardAvoidingView,
-	Platform,
-	Pressable,
-	ScrollView,
-} from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { useTheme } from "@/hooks/useTheme";
@@ -86,17 +80,6 @@ export function ChatThreadScreen() {
 
 	const [draft, setDraft] = useState("");
 	const [sending, setSending] = useState(false);
-	const scrollRef = useRef<ScrollView>(null);
-
-	// Keep the newest message in view as the transcript grows.
-	useEffect(() => {
-		if (activity.messages.length === 0) return;
-		const timer = setTimeout(
-			() => scrollRef.current?.scrollToEnd({ animated: true }),
-			50,
-		);
-		return () => clearTimeout(timer);
-	}, [activity.messages.length]);
 
 	const {
 		available: ttsAvailable,
@@ -225,22 +208,16 @@ export function ChatThreadScreen() {
 						: undefined,
 				}}
 			/>
-			<ScrollView
-				className="flex-1"
-				contentContainerClassName="gap-4 p-4"
-				keyboardDismissMode="interactive"
-				ref={scrollRef}
-			>
-				<ActivityFeed
-					hostOnline={hostOnline}
-					messages={activity.messages}
-					onToggleSpeak={ttsAvailable ? handleToggleSpeak : undefined}
-					phase={activity.phase}
-					relayConfigured={relayConfigured}
-					speakingId={speakingId}
-					variant="chat"
-				/>
-			</ScrollView>
+			<ActivityFeed
+				hostOnline={hostOnline}
+				messages={activity.messages}
+				onToggleSpeak={ttsAvailable ? handleToggleSpeak : undefined}
+				phase={activity.phase}
+				relayConfigured={relayConfigured}
+				scrollable
+				speakingId={speakingId}
+				variant="chat"
+			/>
 			<ChatComposer
 				disabled={composerDisabled}
 				disabledHint={disabledHint}

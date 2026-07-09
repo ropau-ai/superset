@@ -1,3 +1,4 @@
+import { LegendList } from "@legendapp/list/react-native";
 import { Bot, CloudOff, Unplug, WifiOff } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
@@ -60,6 +61,13 @@ export interface ActivityFeedProps {
 	hostOnline: boolean | null;
 	/** Tailors the empty-state copy: the Emilien chat vs. the fleet Activity tab. */
 	variant?: "chat" | "activity";
+	/**
+	 * Own the scroll with a virtualized (windowed) list that auto-sticks to the
+	 * bottom only when the reader is already near it. For the 24/7 Emilien chat,
+	 * whose transcript grows unbounded — the caller must NOT wrap this in a
+	 * ScrollView. Off (default) renders a plain column for a parent ScrollView.
+	 */
+	scrollable?: boolean;
 	/** Id currently spoken aloud (chat only). Absent on the Activity tab. */
 	speakingId?: string | null;
 	/** Toggles read-aloud for an assistant message (chat only). */
@@ -79,6 +87,7 @@ export function ActivityFeed({
 	relayConfigured,
 	hostOnline,
 	variant = "activity",
+	scrollable = false,
 	speakingId,
 	onToggleSpeak,
 }: ActivityFeedProps) {
@@ -88,9 +97,18 @@ export function ActivityFeed({
 		[messages],
 	);
 
+	// A notice fills the scroll area (centered) when it owns the scroll; otherwise
+	// it flows inline for the parent ScrollView.
+	const wrapNotice = (node: ReactNode): ReactNode =>
+		scrollable ? (
+			<View className="flex-1 justify-center">{node}</View>
+		) : (
+			node
+		);
+
 	if (phase === "disabled") {
 		if (!relayConfigured) {
-			return (
+			return wrapNotice(
 				<FeedNotice
 					description="This build isn't pointed at a terminal relay, so live agent activity can't be reached yet."
 					icon={
@@ -101,10 +119,10 @@ export function ActivityFeed({
 						/>
 					}
 					title="Relay not configured"
-				/>
+				/>,
 			);
 		}
-		return (
+		return wrapNotice(
 			<FeedNotice
 				description="The host for this workspace is offline. Activity will resume when it reconnects."
 				icon={
@@ -115,13 +133,13 @@ export function ActivityFeed({
 					/>
 				}
 				title="Host offline"
-			/>
+			/>,
 		);
 	}
 
 	if (visible.length === 0) {
 		if (phase === "loading") {
-			return (
+			return wrapNotice(
 				<FeedNotice
 					description={
 						isChat
@@ -130,13 +148,13 @@ export function ActivityFeed({
 					}
 					spinner
 					title={isChat ? "Loading conversation…" : "Loading activity…"}
-				/>
+				/>,
 			);
 		}
 		// A genuine reachability failure. We keep the copy calm and generic — the
 		// poll retries on its own — and never leak the raw `procedure failed (500)`.
 		if (phase === "error") {
-			return (
+			return wrapNotice(
 				<FeedNotice
 					description="We'll reconnect automatically — hang tight."
 					icon={
@@ -147,16 +165,16 @@ export function ActivityFeed({
 						/>
 					}
 					title="Can't reach the host"
-				/>
+				/>,
 			);
 		}
 		// `unavailable` (host reached, no chat thread) and `ready`-but-empty both
 		// land here: nothing to show yet, calmly.
-		return (
+		return wrapNotice(
 			<FeedNotice
 				description={
 					isChat
-						? "Your conversation with this session will appear here."
+						? "Say hello — your conversation with Emilien will appear here."
 						: hostOnline
 							? "Nothing here yet — the agent's commands and file edits will appear as it works."
 							: "No recent agent activity."
@@ -169,6 +187,33 @@ export function ActivityFeed({
 					/>
 				}
 				title={isChat ? "No messages yet" : "No activity yet"}
+			/>,
+		);
+	}
+
+	// The Emilien chat owns its scroll with a windowed list — the transcript grows
+	// unbounded (24/7), so an unvirtualized ScrollView would leak memory + jank.
+	// Auto-scroll sticks to the newest message only when the reader is near the
+	// bottom, so scrolling back through history isn't yanked forward.
+	if (scrollable) {
+		return (
+			<LegendList
+				alignItemsAtEnd
+				className="flex-1"
+				contentContainerStyle={{ gap: 16, padding: 16 }}
+				data={visible}
+				keyExtractor={(message: ChatActivityMessage) => message.id}
+				maintainScrollAtEnd
+				maintainScrollAtEndThreshold={0.2}
+				maintainVisibleContentPosition
+				recycleItems={false}
+				renderItem={({ item }: { item: ChatActivityMessage }) => (
+					<ActivityMessage
+						message={item}
+						onToggleSpeak={onToggleSpeak}
+						speakingId={speakingId}
+					/>
+				)}
 			/>
 		);
 	}
