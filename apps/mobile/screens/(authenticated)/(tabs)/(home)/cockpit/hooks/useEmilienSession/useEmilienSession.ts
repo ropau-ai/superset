@@ -6,10 +6,7 @@ import type {
 } from "@superset/db/schema";
 import { useLiveQuery } from "@tanstack/react-db";
 import { useMemo } from "react";
-import {
-	resolveEmilienProject,
-	resolveEmilienWorkspace,
-} from "@/lib/emilien";
+import { resolveEmilienProject, resolveEmilienWorkspace } from "@/lib/emilien";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 
 export interface EmilienContext {

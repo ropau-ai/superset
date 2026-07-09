@@ -132,7 +132,10 @@ function CopyButton({ getText }: { getText: () => string }) {
 		>
 			<Icon
 				as={copied ? Check : Copy}
-				className={cn("size-3.5", copied ? "text-emerald-400" : "text-neutral-400")}
+				className={cn(
+					"size-3.5",
+					copied ? "text-emerald-400" : "text-neutral-400",
+				)}
 				strokeWidth={2}
 			/>
 		</Pressable>
@@ -263,9 +266,7 @@ export function LiveTerminal({
 				>
 					{terminalTitle?.trim() || "terminal"}
 				</Text>
-				{hasOutput ? (
-					<CopyButton getText={() => lines.join("\n")} />
-				) : null}
+				{hasOutput ? <CopyButton getText={() => lines.join("\n")} /> : null}
 				<ConnectionPill connectionState={connectionState} phase={phase} />
 			</View>
 			<View className="flex-1">{body}</View>

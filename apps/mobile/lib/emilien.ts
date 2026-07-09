@@ -32,7 +32,9 @@ export function resolveEmilienWorkspace(
 ): SelectV2Workspace | null {
 	const project = resolveEmilienProject(projects);
 	if (!project) return null;
-	const projectWorkspaces = workspaces.filter((w) => w.projectId === project.id);
+	const projectWorkspaces = workspaces.filter(
+		(w) => w.projectId === project.id,
+	);
 	return (
 		projectWorkspaces.find((w) => w.type === "main") ??
 		projectWorkspaces.find((w) => w.branch === "main") ??

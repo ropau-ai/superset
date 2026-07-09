@@ -100,11 +100,7 @@ export function ActivityFeed({
 	// A notice fills the scroll area (centered) when it owns the scroll; otherwise
 	// it flows inline for the parent ScrollView.
 	const wrapNotice = (node: ReactNode): ReactNode =>
-		scrollable ? (
-			<View className="flex-1 justify-center">{node}</View>
-		) : (
-			node
-		);
+		scrollable ? <View className="flex-1 justify-center">{node}</View> : node;
 
 	if (phase === "disabled") {
 		if (!relayConfigured) {
