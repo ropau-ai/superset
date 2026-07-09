@@ -92,19 +92,14 @@ function SubAgentRow({
 					</Text>
 					<AgentTypeChip definitionId={binding.definitionId} />
 				</View>
-				<View className="flex-row items-center gap-2">
-					{lastActive ? (
-						<Text className="text-muted-foreground text-xs" numberOfLines={1}>
-							active {lastActive}
-						</Text>
-					) : null}
-					{lastActive ? (
-						<Text className="text-muted-foreground text-xs">·</Text>
-					) : null}
-					{/* No clean per-terminal-agent usage source (interactive PTY, hook
-					    events carry none) → honest "—", never a fabricated number. */}
-					<TokenBadge tokens={null} />
-				</View>
+				{/* No clean per-terminal-agent token source (interactive PTY, hook
+				    events carry none), so no token chip here — a "—" placeholder was
+				    pure clutter. Just the last-active line. */}
+				{lastActive ? (
+					<Text className="text-muted-foreground text-xs" numberOfLines={1}>
+						active {lastActive}
+					</Text>
+				) : null}
 			</View>
 
 			<AgentStatusBadge kind={status.kind} label={status.label} />

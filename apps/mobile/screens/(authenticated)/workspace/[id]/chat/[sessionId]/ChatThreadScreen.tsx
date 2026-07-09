@@ -12,22 +12,34 @@ import {
 	buildHostRoutingKey,
 	HostRequestError,
 	isRelayConfigured,
+	listHostTerminals,
 	sendSessionMessage,
+	writeTerminalInput,
 } from "@/lib/relay/relay";
+import { deterministicSessionId } from "@/lib/relay/terminalSessionId";
 import { speakableText } from "@/lib/speech/speakableText";
 import { EMBER } from "@/lib/theme";
 import { ActivityFeed } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/ActivityFeed";
+import { LiveTerminal } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/LiveTerminal";
 import { useSessionActivity } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/hooks/useSessionActivity";
+import { useTerminalStream } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/hooks/useTerminalStream";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 import { ChatComposer } from "./components/ChatComposer";
+import { useTerminalAgentTarget } from "./hooks/useTerminalAgentTarget";
 
 /**
- * The live chat with a session's agent (the Emilien dialogue, and any other
- * session). Messages are polled from the host `chat.listMessages` over the relay
- * and rendered with the shared activity timeline (user bubbles + assistant text
- * and rich tool cards); the composer sends via `chat.sendMessage`, and the reply
- * streams in on the next poll. Degrades cleanly when the relay/host is
- * unreachable — the transcript shows why and the composer blocks send.
+ * The live conversation with a session's agent. Two shapes share one screen:
+ *
+ * - **Terminal agents** (Emilien, `claude`, any PTY agent) have no mastra chat
+ *   thread, so `chat.sendMessage` can't reach them. We stream their PTY as the
+ *   conversation and the composer types the user's text straight into stdin via
+ *   `terminal.writeInput` — exactly as if typed at the keyboard.
+ * - **Chat agents** poll `chat.listMessages` and send via `chat.sendMessage`,
+ *   rendering the rich activity timeline (user bubbles + assistant tool cards).
+ *
+ * Which one a session is is resolved from its id (see `useTerminalAgentTarget`).
+ * Degrades cleanly when the relay/host is unreachable — the transcript shows why
+ * and the composer blocks send.
  */
 export function ChatThreadScreen() {
 	const { id: workspaceId, sessionId } = useLocalSearchParams<{
@@ -71,11 +83,31 @@ export function ChatThreadScreen() {
 	const relayReady =
 		relayConfigured && hostOnline === true && !!routingKey && !!workspace;
 
+	// Is this a terminal agent (talk over the PTY) or a chat agent (mastra
+	// thread)? Resolved from the workspace's live terminals.
+	const target = useTerminalAgentTarget({
+		routingKey,
+		workspaceId: workspace?.id ?? null,
+		sessionId: sessionId ?? null,
+		enabled: relayReady,
+	});
+	const isTerminal = target.status === "terminal";
+
+	// Chat-agent transcript — paused entirely for a terminal agent (it has no
+	// thread, so the poll would only 500).
 	const activity = useSessionActivity({
 		routingKey,
 		sessionId: sessionId ?? null,
 		workspaceId: workspace?.id ?? null,
-		enabled: relayReady,
+		enabled: relayReady && !isTerminal,
+	});
+
+	// Terminal-agent PTY stream — the conversation surface for terminal agents.
+	const stream = useTerminalStream({
+		routingKey,
+		workspaceId: workspace?.id ?? null,
+		enabled: relayReady && isTerminal,
+		terminalId: isTerminal ? target.terminalId : null,
 	});
 
 	const [draft, setDraft] = useState("");
@@ -140,30 +172,66 @@ export function ChatThreadScreen() {
 		if (!content || sending || !routingKey || !workspace || !sessionId) return;
 		setSending(true);
 		setDraft("");
+
+		// Write the user's line straight into the agent's stdin. Enter is a
+		// carriage return in a PTY, so the trailing `\r` submits the line.
+		const writeToPty = async (terminalId: string) => {
+			await writeTerminalInput(
+				routingKey,
+				workspace.id,
+				terminalId,
+				`${content}\r`,
+			);
+		};
+
 		try {
-			await sendSessionMessage(routingKey, sessionId, workspace.id, content);
+			if (isTerminal) {
+				await writeToPty(target.terminalId);
+			} else {
+				await sendSessionMessage(routingKey, sessionId, workspace.id, content);
+			}
 		} catch (err) {
-			setDraft(content);
-			// The host answering with an error (e.g. a terminal session with no
-			// thread) is a different story from the host being unreachable — say so
-			// without dumping a status code on the user.
+			// The chat path 500s for a terminal agent that hadn't been classified as
+			// one yet (e.g. sent during resolution). Recover by resolving the
+			// session's terminal and writing into it — a reachable terminal session
+			// must never fail to send.
 			const reachedHost = err instanceof HostRequestError;
+			if (reachedHost && !isTerminal) {
+				try {
+					const { sessions: liveTerminals } = await listHostTerminals(
+						routingKey,
+						workspace.id,
+					);
+					const match = liveTerminals.find(
+						(terminal) =>
+							deterministicSessionId(terminal.terminalId) === sessionId,
+					);
+					if (match) {
+						await writeToPty(match.terminalId);
+						setSending(false);
+						return;
+					}
+				} catch {
+					// fall through to the error below
+				}
+			}
+			setDraft(content);
 			Alert.alert(
 				"Message not sent",
 				reachedHost
-					? "Emilien couldn't take that message right now. Give it a moment and try again."
-					: "Couldn't reach Emilien's host. Check your connection and try again.",
+					? "The agent couldn't take that message right now. Give it a moment and try again."
+					: "Couldn't reach the agent's host. Check your connection and try again.",
 			);
 		} finally {
 			setSending(false);
 		}
-	}, [draft, sending, routingKey, workspace, sessionId]);
+	}, [draft, sending, routingKey, workspace, sessionId, isTerminal, target]);
 
 	const composerDisabled = !relayReady;
 	const disabledHint = !relayConfigured
 		? "This build isn't pointed at a relay yet."
 		: hostOnline === false
-			? "Emilien's host is offline — it'll send when it reconnects."
+			? "The agent's host is offline — it'll send when it reconnects."
 			: "Connecting to the host…";
 
 	return (
@@ -176,48 +244,58 @@ export function ChatThreadScreen() {
 			<Stack.Screen
 				options={{
 					title: session?.title ?? "Emilien",
-					// Auto-speak toggle — hidden entirely when the native TTS engine
+					// Auto-speak toggle — only for chat agents (terminal agents have no
+					// assistant prose to read), and hidden when the native TTS engine
 					// isn't in this build, so there's never a dead control.
-					headerRight: ttsAvailable
-						? () => (
-								<Pressable
-									accessibilityLabel={
-										autoSpeak
-											? "Turn off speaking replies aloud"
-											: "Speak new replies aloud"
-									}
-									accessibilityRole="switch"
-									accessibilityState={{ checked: autoSpeak }}
-									className="size-9 items-center justify-center rounded-full"
-									onPress={toggleAutoSpeak}
-									style={
-										autoSpeak ? { backgroundColor: `${EMBER}1f` } : undefined
-									}
-								>
-									{autoSpeak ? (
-										<Volume2 color={EMBER} size={20} strokeWidth={1.9} />
-									) : (
-										<VolumeX
-											color={theme.mutedForeground}
-											size={20}
-											strokeWidth={1.9}
-										/>
-									)}
-								</Pressable>
-							)
-						: undefined,
+					headerRight:
+						ttsAvailable && !isTerminal
+							? () => (
+									<Pressable
+										accessibilityLabel={
+											autoSpeak
+												? "Turn off speaking replies aloud"
+												: "Speak new replies aloud"
+										}
+										accessibilityRole="switch"
+										accessibilityState={{ checked: autoSpeak }}
+										className="size-9 items-center justify-center rounded-full"
+										onPress={toggleAutoSpeak}
+										style={
+											autoSpeak ? { backgroundColor: `${EMBER}1f` } : undefined
+										}
+									>
+										{autoSpeak ? (
+											<Volume2 color={EMBER} size={20} strokeWidth={1.9} />
+										) : (
+											<VolumeX
+												color={theme.mutedForeground}
+												size={20}
+												strokeWidth={1.9}
+											/>
+										)}
+									</Pressable>
+								)
+							: undefined,
 				}}
 			/>
-			<ActivityFeed
-				hostOnline={hostOnline}
-				messages={activity.messages}
-				onToggleSpeak={ttsAvailable ? handleToggleSpeak : undefined}
-				phase={activity.phase}
-				relayConfigured={relayConfigured}
-				scrollable
-				speakingId={speakingId}
-				variant="chat"
-			/>
+			{isTerminal ? (
+				<LiveTerminal
+					className="mx-3 mt-3 mb-1 flex-1"
+					relayConfigured={relayConfigured}
+					stream={stream}
+				/>
+			) : (
+				<ActivityFeed
+					hostOnline={hostOnline}
+					messages={activity.messages}
+					onToggleSpeak={ttsAvailable ? handleToggleSpeak : undefined}
+					phase={activity.phase}
+					relayConfigured={relayConfigured}
+					scrollable
+					speakingId={speakingId}
+					variant="chat"
+				/>
+			)}
 			<ChatComposer
 				disabled={composerDisabled}
 				disabledHint={disabledHint}
