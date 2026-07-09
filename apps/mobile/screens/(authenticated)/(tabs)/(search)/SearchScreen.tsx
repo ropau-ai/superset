@@ -17,7 +17,7 @@ export function SearchScreen() {
 		(q) => q.from({ v2Workspaces: collections.v2Workspaces }),
 		[collections],
 	);
-	const { data: projects } = useLiveQuery(
+	const { data: projects, isReady: projectsReady } = useLiveQuery(
 		(q) => q.from({ v2Projects: collections.v2Projects }),
 		[collections],
 	);
@@ -78,7 +78,10 @@ export function SearchScreen() {
 					) : null
 				}
 				ListEmptyComponent={
-					query.trim() && !workspacesReady ? null : (
+					// While either collection is still hydrating, a query can't be
+					// answered honestly — project-name matches would silently miss and
+					// "No workspaces match" would flash prematurely. Wait for both.
+					query.trim() && !(workspacesReady && projectsReady) ? null : (
 						<View className="items-center justify-center py-20">
 							<Text className="text-center text-muted-foreground">
 								{query.trim()

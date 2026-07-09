@@ -1,5 +1,6 @@
 import { useLiveQuery } from "@tanstack/react-db";
 import { useRouter } from "expo-router";
+import { Alert } from "react-native";
 import { authClient } from "@/lib/auth/client";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 
@@ -28,6 +29,10 @@ export function useOrganizations() {
 			console.error(
 				"[organization/switch] Failed to switch organization:",
 				error,
+			);
+			Alert.alert(
+				"Couldn't switch organization",
+				"Something went wrong. Check your connection and try again.",
 			);
 		}
 	};

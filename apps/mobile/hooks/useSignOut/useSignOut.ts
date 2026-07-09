@@ -17,6 +17,10 @@ export function useSignOut() {
 			router.replace("/(auth)/sign-in");
 		} catch (error) {
 			console.error("[auth/signOut] Failed to sign out:", error);
+			Alert.alert(
+				"Couldn't log out",
+				"Something went wrong signing you out. Please try again.",
+			);
 		} finally {
 			setIsSigningOut(false);
 		}

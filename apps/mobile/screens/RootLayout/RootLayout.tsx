@@ -5,6 +5,7 @@ import { ThemeProvider } from "expo-router/react-navigation";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Uniwind } from "uniwind";
+import { BrandedLoader } from "@/components/BrandedLoader";
 import { useSession } from "@/lib/auth/client";
 import { NotificationsProvider } from "@/lib/notifications";
 import { NAV_THEME } from "@/lib/theme";
@@ -20,7 +21,9 @@ const queryClient = new QueryClient();
 export function RootLayout() {
 	const { data: session, isPending } = useSession();
 
-	if (isPending) return null;
+	// The Expo splash covers the very first frames, but the session fetch can
+	// outlast it — a branded holding screen beats a blank flash in that gap.
+	if (isPending) return <BrandedLoader />;
 
 	return (
 		<GestureHandlerRootView style={{ flex: 1 }}>

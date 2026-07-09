@@ -53,6 +53,10 @@ export function useTerminalStream({
 
 	const linesRef = useRef<string[]>([]);
 	const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	// The last live terminal target we attached to, so a mere tab toggle (which
+	// flips `enabled`) can be told apart from a genuinely new terminal — the
+	// former keeps its scrollback, the latter starts clean.
+	const lastTargetRef = useRef<string | null>(null);
 
 	const retry = useCallback(() => setRetryToken((n) => n + 1), []);
 
@@ -65,12 +69,28 @@ export function useTerminalStream({
 		let disposed = false;
 		let connection: TerminalStreamConnection | null = null;
 		const decoder = createUtf8Decoder();
+
+		// Re-entering the *same* live terminal (typically flipping back from the
+		// Activity tab) keeps the cached scrollback on screen while we re-attach
+		// transparently. The reconnect replays the full buffer, so we drop the
+		// internal buffer now and let the replay rebuild it — the visible lines
+		// only swap once fresh output flushes, so there's no "Connecting…" flash
+		// or wiped history. A genuinely new target starts clean.
+		const targetKey = `${routingKey}::${workspaceId}`;
+		const resumingSameTarget =
+			targetKey === lastTargetRef.current && linesRef.current.length > 0;
+		lastTargetRef.current = targetKey;
+
 		linesRef.current = [];
-		setLines([]);
-		setTerminalTitle(null);
 		setError(null);
 		setConnectionState(null);
-		setPhase("discovering");
+		if (resumingSameTarget) {
+			setPhase("streaming");
+		} else {
+			setLines([]);
+			setTerminalTitle(null);
+			setPhase("discovering");
+		}
 
 		const scheduleFlush = () => {
 			if (flushTimer.current !== null) return;

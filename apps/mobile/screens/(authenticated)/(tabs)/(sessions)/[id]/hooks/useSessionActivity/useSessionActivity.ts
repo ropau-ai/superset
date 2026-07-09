@@ -53,13 +53,35 @@ export function useSessionActivity({
 	const [phase, setPhase] = useState<SessionActivityPhase>("disabled");
 	const [error, setError] = useState<string | null>(null);
 	const activeRef = useRef(true);
+	// The session identity the cached messages belong to, so a tab toggle (which
+	// only flips `enabled`) can be told apart from navigating to another session.
+	const identityRef = useRef<string | null>(null);
 
 	useEffect(() => {
 		activeRef.current = true;
-		if (!enabled || !routingKey || !sessionId || !workspaceId) {
-			setPhase("disabled");
+		const identityKey =
+			routingKey && sessionId && workspaceId
+				? `${routingKey}::${sessionId}::${workspaceId}`
+				: null;
+
+		// Only wipe the cached transcript when the session identity actually
+		// changes. A tab toggle keeps the same identity, so the timeline survives
+		// the switch — no reset, no loading flash on the way back.
+		if (identityKey !== identityRef.current) {
 			setMessages([]);
 			setError(null);
+			identityRef.current = identityKey;
+		}
+
+		// Equivalent to `!identityKey`, but written out so TS narrows the three
+		// params to non-null for the poll below.
+		if (!routingKey || !sessionId || !workspaceId) {
+			setPhase("disabled");
+			return;
+		}
+		if (!enabled) {
+			// Tab hidden but the same session — pause polling and keep the last
+			// transcript + phase so switching back shows it instantly.
 			return;
 		}
 

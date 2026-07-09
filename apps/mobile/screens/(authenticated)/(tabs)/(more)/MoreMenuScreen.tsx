@@ -2,7 +2,7 @@ import { useLiveQuery } from "@tanstack/react-db";
 import { useRouter } from "expo-router";
 import { ArrowLeftRight, ChevronRight, Settings } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
@@ -34,9 +34,13 @@ export function MoreMenuScreen() {
 		setSwitching(true);
 		try {
 			await authClient.organization.setActive({ organizationId: orgId });
-			router.replace("/(authenticated)/(home)");
+			router.replace("/(authenticated)/(tabs)/(home)");
 		} catch (error) {
 			console.error("[org/switch] Failed to switch organization:", error);
+			Alert.alert(
+				"Couldn't switch organization",
+				"Something went wrong. Check your connection and try again.",
+			);
 		} finally {
 			setSwitching(false);
 		}
@@ -101,7 +105,9 @@ export function MoreMenuScreen() {
 					</Text>
 					<View className="rounded-xl bg-card">
 						<Pressable
-							onPress={() => router.push("/(authenticated)/(more)/settings")}
+							onPress={() =>
+								router.push("/(authenticated)/(tabs)/(more)/settings")
+							}
 							className="flex-row items-center gap-3 px-4 py-3"
 						>
 							<Icon as={Settings} className="text-foreground size-5" />

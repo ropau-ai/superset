@@ -13,7 +13,7 @@ import {
 	User,
 } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable, ScrollView, View } from "react-native";
 import { EmilienLogo } from "@/components/EmilienLogo";
 import { Switch } from "@/components/ui/switch";
 import { Text } from "@/components/ui/text";
@@ -101,11 +101,22 @@ export function SettingsScreen() {
 	const build = Application.nativeBuildVersion ?? null;
 
 	const handleToggleNotifications = async (value: boolean) => {
-		await setEnabled(value);
-		if (value) {
-			setPermissionBlocked(!(await ensureAgentNotificationPermission()));
-		} else {
-			setPermissionBlocked(false);
+		try {
+			await setEnabled(value);
+			if (value) {
+				setPermissionBlocked(!(await ensureAgentNotificationPermission()));
+			} else {
+				setPermissionBlocked(false);
+			}
+		} catch (error) {
+			console.error(
+				"[notifications/toggle] Failed to update notifications:",
+				error,
+			);
+			Alert.alert(
+				"Couldn't update notifications",
+				"Your preference wasn't saved. Please try again.",
+			);
 		}
 	};
 
