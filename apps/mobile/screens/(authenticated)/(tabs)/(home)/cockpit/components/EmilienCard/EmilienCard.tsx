@@ -1,13 +1,12 @@
 import { formatDistanceToNow } from "date-fns";
 import { ChevronRight, Clock } from "lucide-react-native";
 import { Pressable, View } from "react-native";
-import { EmilienLogo } from "@/components/EmilienLogo";
-import { LivePulseDot } from "@/components/LivePulseDot";
+import { EmilienLoader } from "@/components/EmilienLoader";
 import { TokenBadge } from "@/components/TokenBadge";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import type { AgentTokens } from "@/hooks/useAgentTokens";
-import { EMBER, STATUS_COLORS, withAlpha } from "@/lib/theme";
+import { EMBER, withAlpha } from "@/lib/theme";
 import type { LiveAgentStatus } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
 import { AgentStatusBadge } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/AgentStatusBadge";
 
@@ -43,8 +42,9 @@ export interface EmilienCardProps {
 
 /**
  * The pinned hero of the cockpit: Emilien, the orchestrator. A prominent
- * ember-washed card with the brand mark, a live pulse, current status, uptime,
- * token total, and last activity. Tapping opens the live chat with Emilien —
+ * ember-washed card with a minimal status loader (spins in ember while working,
+ * rests dim when idle), current status, uptime, token total, and last activity.
+ * Tapping opens the live chat with Emilien —
  * the one entry point for the Paul↔Emilien dialogue. When no session has
  * materialized it still renders (Emilien is the constant), in a calm "veille"
  * state, non-tappable.
@@ -61,8 +61,6 @@ export function EmilienCard({
 	onPress,
 }: EmilienCardProps) {
 	const online = hostOnline === true;
-	const live = online && status.kind !== "ended";
-	const dotColor = online ? STATUS_COLORS.live : STATUS_COLORS.idle;
 
 	const activityLine = hasSession
 		? lastActiveAt
@@ -86,10 +84,7 @@ export function EmilienCard({
 						className="size-14 items-center justify-center rounded-2xl border"
 						style={{ borderColor: EMBER_BORDER, backgroundColor: EMBER_TILE }}
 					>
-						<EmilienLogo size={34} />
-						<View className="absolute -right-1 -top-1 rounded-full bg-background p-0.5">
-							<LivePulseDot active={live} color={dotColor} size={9} />
-						</View>
+						<EmilienLoader status={status.kind} online={online} size={32} />
 					</View>
 
 					<View className="flex-1 gap-1">
