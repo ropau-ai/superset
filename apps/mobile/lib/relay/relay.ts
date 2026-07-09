@@ -290,3 +290,123 @@ export function sendSessionMessage(
 		"POST",
 	);
 }
+
+// --- Git changes (the Changes tab diff viewer) ----------------------------
+//
+// The workspace's real git state — changed files + per-file diffs — lives in
+// the host's worktree, exposed by the host-service `git.getStatus` /
+// `git.getDiff` tRPC procedures and reachable over the SAME relay path the
+// terminal/agent/chat calls above use. This is what desktop's DiffPane and
+// web's SessionDiff read; mobile mirrors it. Types are hand-typed at the
+// boundary (rather than importing `@superset/host-service`, which drags
+// node-only modules into the mobile bundle) — the same convention the rest of
+// this file follows.
+
+/**
+ * A changed file's status, mirroring the host-service `FileStatus`
+ * (GitHub's `PatchStatus` + `"untracked"` for the working tree). Widened with a
+ * tolerant `(string & {})` so an unknown status from an out-of-date host
+ * degrades to a neutral badge instead of a type/runtime error.
+ */
+export type GitFileStatus =
+	| "added"
+	| "copied"
+	| "changed"
+	| "deleted"
+	| "modified"
+	| "renamed"
+	| "untracked"
+	// Open union: an unknown status from an out-of-date host still parses and the
+	// UI maps it to a neutral fallback badge.
+	| (string & {});
+
+/** One changed file in the worktree, as returned by the host `git.getStatus`. */
+export interface GitChangedFile {
+	path: string;
+	oldPath?: string;
+	status: GitFileStatus;
+	additions: number;
+	deletions: number;
+	isBinary?: boolean;
+}
+
+/** One branch summary in the git status snapshot (only `name` is read here). */
+export interface GitBranch {
+	name: string;
+	isHead: boolean;
+}
+
+/**
+ * The worktree's git status, as returned by the host `git.getStatus`.
+ * `againstBase` is the 3-dot diff vs the base branch (what this workspace's
+ * branch changed); `staged`/`unstaged` are the working-tree index/tree. The
+ * host also returns richer `Branch` objects and `ignoredPaths`, but the Changes
+ * tab only needs these fields, so the extras are left off the boundary type.
+ */
+export interface GitStatusSnapshot {
+	currentBranch: GitBranch;
+	defaultBranch: GitBranch;
+	againstBase: GitChangedFile[];
+	staged: GitChangedFile[];
+	unstaged: GitChangedFile[];
+}
+
+/** Which comparison a per-file diff is against — mirrors `git.getDiff`'s `category`. */
+export type GitDiffCategory = "against-base" | "staged" | "unstaged" | "commit";
+
+/**
+ * A single file's before/after contents, as returned by the host `git.getDiff`.
+ * The host returns raw file contents (not a unified patch); the client computes
+ * the line diff locally (see `computeLineDiff`). Either side is `""` when the
+ * file is added (no `oldFile`) or deleted (no `newFile`).
+ */
+export interface GitFileDiff {
+	oldFile: { name: string; contents: string };
+	newFile: { name: string; contents: string };
+}
+
+/**
+ * Read the worktree's git status (changed-files list) for a workspace on its
+ * host. `workspaceId` is the `v2Workspaces.id` route param — the same id the
+ * terminal/chat relay calls use. `baseBranch` is left to the host to resolve
+ * (its `resolveBaseComparison`) when omitted, matching desktop's default. Throws
+ * `HostRequestError` when the host is reached but the procedure fails (e.g. an
+ * out-of-date host without git procedures), which the caller degrades to a calm
+ * empty state rather than a raw error.
+ */
+export function getWorkspaceGitStatus(
+	routingKey: string,
+	workspaceId: string,
+	baseBranch?: string,
+) {
+	return hostTrpcCall<GitStatusSnapshot>(
+		routingKey,
+		"git.getStatus",
+		{ workspaceId, baseBranch, priority: "foreground" },
+		"GET",
+	);
+}
+
+/**
+ * Read one file's before/after contents for a workspace on its host. `category`
+ * selects the comparison (`against-base` for committed branch changes,
+ * `staged`/`unstaged` for the working tree). The caller turns the returned
+ * contents into a line diff. Throws `HostRequestError` on a host-side failure.
+ */
+export function getWorkspaceFileDiff(
+	routingKey: string,
+	workspaceId: string,
+	args: { path: string; category: GitDiffCategory; baseBranch?: string },
+) {
+	return hostTrpcCall<GitFileDiff>(
+		routingKey,
+		"git.getDiff",
+		{
+			workspaceId,
+			path: args.path,
+			category: args.category,
+			baseBranch: args.baseBranch,
+		},
+		"GET",
+	);
+}
