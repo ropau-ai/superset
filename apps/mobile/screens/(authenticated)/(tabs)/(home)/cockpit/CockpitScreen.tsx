@@ -298,7 +298,6 @@ export function CockpitScreen() {
 			>
 				<EmilienCard
 					hasSession={!!emilien.session && !!emilien.workspace}
-					hostOnline={emilienHostOnline}
 					lastActiveAt={
 						emilien.session
 							? (emilien.session.lastActiveAt ??

@@ -2,13 +2,22 @@ import type {
 	SelectGithubPullRequest,
 	SelectV2Workspace,
 } from "@superset/db/schema";
-import { Layers } from "lucide-react-native";
-import { View } from "react-native";
+import { ChevronDown, Layers } from "lucide-react-native";
+import { Pressable, View } from "react-native";
+import Animated, {
+	FadeOutUp,
+	LayoutAnimationConfig,
+	LinearTransition,
+	useAnimatedStyle,
+	useDerivedValue,
+	withTiming,
+} from "react-native-reanimated";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Text } from "@/components/ui/text";
 import { ProjectAvatar } from "../../../workspaces/components/ProjectAvatar";
 import { WorkspaceRow } from "../../../workspaces/components/WorkspaceRow";
+import { useFleetCollapse } from "../../hooks/useFleetCollapse";
 
 /** One workspace (branch) row's fully-resolved view data. */
 export interface FleetWorkspaceView {
@@ -37,16 +46,38 @@ export interface FleetSectionProps {
 
 function ProjectGroup({
 	group,
+	collapsed,
+	onToggle,
 	onPressWorkspace,
 	onLongPressWorkspace,
 }: {
 	group: FleetProjectGroup;
+	collapsed: boolean;
+	onToggle: () => void;
 	onPressWorkspace: (workspace: SelectV2Workspace) => void;
 	onLongPressWorkspace?: (workspace: SelectV2Workspace) => void;
 }) {
+	// The chevron rests pointing down when expanded, rotates to ▶ when collapsed.
+	const rotation = useDerivedValue(
+		() => withTiming(collapsed ? -90 : 0, { duration: 200 }),
+		[collapsed],
+	);
+	const chevronStyle = useAnimatedStyle(() => ({
+		transform: [{ rotate: `${rotation.value}deg` }],
+	}));
+
 	return (
-		<View className="gap-0.5 overflow-hidden rounded-2xl border border-border bg-card">
-			<View className="flex-row items-center gap-2 px-3 pt-2.5 pb-1">
+		<Animated.View
+			className="gap-0.5 overflow-hidden rounded-2xl border border-border bg-card"
+			layout={LinearTransition.duration(200)}
+		>
+			<Pressable
+				accessibilityRole="button"
+				accessibilityState={{ expanded: !collapsed }}
+				className="flex-row items-center gap-2 px-3 pt-2.5 pb-1"
+				onPress={onToggle}
+				style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+			>
 				<ProjectAvatar
 					iconUrl={group.projectIconUrl}
 					name={group.projectName}
@@ -62,19 +93,31 @@ function ProjectGroup({
 				<Text className="text-muted-foreground text-xs">
 					{group.workspaces.length}
 				</Text>
-			</View>
-			{group.workspaces.map((view) => (
-				<WorkspaceRow
-					agentDefinitionId={view.agentDefinitionId}
-					hostOnline={view.hostOnline}
-					key={view.workspace.id}
-					onLongPress={() => onLongPressWorkspace?.(view.workspace)}
-					onPress={() => onPressWorkspace(view.workspace)}
-					pullRequest={view.pullRequest}
-					workspace={view.workspace}
-				/>
-			))}
-		</View>
+				<Animated.View style={chevronStyle}>
+					<Icon
+						as={ChevronDown}
+						className="size-4 text-muted-foreground"
+						strokeWidth={2}
+					/>
+				</Animated.View>
+			</Pressable>
+			{collapsed ? null : (
+				<Animated.View exiting={FadeOutUp.duration(150)}>
+					{group.workspaces.map((view) => (
+						<WorkspaceRow
+							agentDefinitionId={view.agentDefinitionId}
+							hostOnline={view.hostOnline}
+							key={view.workspace.id}
+							leadingVariant="branch-status"
+							onLongPress={() => onLongPressWorkspace?.(view.workspace)}
+							onPress={() => onPressWorkspace(view.workspace)}
+							pullRequest={view.pullRequest}
+							workspace={view.workspace}
+						/>
+					))}
+				</Animated.View>
+			)}
+		</Animated.View>
 	);
 }
 
@@ -109,6 +152,7 @@ export function FleetSection({
 	onPressWorkspace,
 	onLongPressWorkspace,
 }: FleetSectionProps) {
+	const { isCollapsed, toggle } = useFleetCollapse();
 	const workspaceCount = groups.reduce(
 		(sum, g) => sum + g.workspaces.length,
 		0,
@@ -147,16 +191,20 @@ export function FleetSection({
 					</View>
 				)
 			) : (
-				<View className="gap-3">
-					{groups.map((group) => (
-						<ProjectGroup
-							group={group}
-							key={group.key}
-							onLongPressWorkspace={onLongPressWorkspace}
-							onPressWorkspace={onPressWorkspace}
-						/>
-					))}
-				</View>
+				<LayoutAnimationConfig skipEntering>
+					<View className="gap-3">
+						{groups.map((group) => (
+							<ProjectGroup
+								collapsed={isCollapsed(group.key)}
+								group={group}
+								key={group.key}
+								onLongPressWorkspace={onLongPressWorkspace}
+								onPressWorkspace={onPressWorkspace}
+								onToggle={() => toggle(group.key)}
+							/>
+						))}
+					</View>
+				</LayoutAnimationConfig>
 			)}
 		</View>
 	);

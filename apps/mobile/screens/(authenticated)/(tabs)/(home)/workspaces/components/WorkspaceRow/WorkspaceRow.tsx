@@ -8,6 +8,7 @@ import {
 	CircleDot,
 	Cloud,
 	CloudOff,
+	GitBranch,
 	GitMerge,
 	GitPullRequest,
 } from "lucide-react-native";
@@ -42,6 +43,18 @@ const PR_BADGE_CONFIG = {
 
 type PrBadgeState = keyof typeof PR_BADGE_CONFIG;
 
+/**
+ * Color of the small PR-status dot on the branch glyph (the `branch-status`
+ * leading variant), matching the desktop sidebar's PRIcon palette: open = green,
+ * merged = purple, draft/closed = muted. No PR → no dot (a plain branch).
+ */
+const PR_DOT_CLASS: Record<PrBadgeState, string> = {
+	open: "bg-emerald-500",
+	merged: "bg-purple-500",
+	draft: "bg-muted-foreground",
+	closed: "bg-destructive",
+} as const;
+
 const ADDITIONS_COLOR = DIFF_COLORS.addition;
 const DELETIONS_COLOR = DIFF_COLORS.deletion;
 
@@ -50,6 +63,7 @@ export function WorkspaceRow({
 	pullRequest,
 	hostOnline,
 	agentDefinitionId,
+	leadingVariant = "host",
 	onPress,
 	onLongPress,
 }: {
@@ -61,6 +75,12 @@ export function WorkspaceRow({
 	 * an agent-type chip. Omitted (the WorkspacesScreen list) shows nothing.
 	 */
 	agentDefinitionId?: string | null;
+	/**
+	 * The leading (left) glyph. `host` (default, WorkspacesScreen) shows the host
+	 * cloud state; `branch-status` (the cockpit Fleet) shows a git-branch glyph
+	 * with a PR-status dot, mirroring the desktop sidebar.
+	 */
+	leadingVariant?: "host" | "branch-status";
 	onPress: () => void;
 	onLongPress: () => void;
 }) {
@@ -85,11 +105,26 @@ export function WorkspaceRow({
 			onLongPress={onLongPress}
 		>
 			<View className="size-9 items-center justify-center">
-				<Icon
-					as={HostIcon}
-					className="text-muted-foreground size-5"
-					strokeWidth={1.75}
-				/>
+				{leadingVariant === "branch-status" ? (
+					<View className="relative">
+						<Icon
+							as={GitBranch}
+							className="text-muted-foreground size-5"
+							strokeWidth={1.75}
+						/>
+						{prState ? (
+							<View
+								className={`-bottom-0.5 -right-0.5 absolute size-2.5 rounded-full border border-card ${PR_DOT_CLASS[prState]}`}
+							/>
+						) : null}
+					</View>
+				) : (
+					<Icon
+						as={HostIcon}
+						className="text-muted-foreground size-5"
+						strokeWidth={1.75}
+					/>
+				)}
 			</View>
 			<View className="flex-1 gap-0.5">
 				<Text className="font-medium" numberOfLines={1}>
