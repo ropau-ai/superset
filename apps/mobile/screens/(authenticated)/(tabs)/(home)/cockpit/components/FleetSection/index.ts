@@ -1,5 +1,6 @@
 export {
-	type FleetGroupView,
+	type FleetProjectGroup,
 	FleetSection,
 	type FleetSectionProps,
+	type FleetWorkspaceView,
 } from "./FleetSection";

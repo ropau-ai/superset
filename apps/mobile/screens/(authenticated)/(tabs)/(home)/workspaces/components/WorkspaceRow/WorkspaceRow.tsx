@@ -12,6 +12,7 @@ import {
 	GitPullRequest,
 } from "lucide-react-native";
 import { Linking, Pressable, View } from "react-native";
+import { AgentTypeChip } from "@/components/AgentTypeChip";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { DIFF_COLORS } from "@/lib/theme";
@@ -48,12 +49,18 @@ export function WorkspaceRow({
 	workspace,
 	pullRequest,
 	hostOnline,
+	agentDefinitionId,
 	onPress,
 	onLongPress,
 }: {
 	workspace: SelectV2Workspace;
 	pullRequest?: SelectGithubPullRequest;
 	hostOnline?: boolean;
+	/**
+	 * Live agent runtime on this workspace, when the relay resolved one — renders
+	 * an agent-type chip. Omitted (the WorkspacesScreen list) shows nothing.
+	 */
+	agentDefinitionId?: string | null;
 	onPress: () => void;
 	onLongPress: () => void;
 }) {
@@ -98,6 +105,9 @@ export function WorkspaceRow({
 					<Text className="text-muted-foreground text-xs">
 						· {formatDistanceToNow(workspace.updatedAt, { addSuffix: true })}
 					</Text>
+					{agentDefinitionId ? (
+						<AgentTypeChip definitionId={agentDefinitionId} />
+					) : null}
 				</View>
 			</View>
 			<View className="flex-row items-center gap-2">
