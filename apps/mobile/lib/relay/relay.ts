@@ -291,6 +291,31 @@ export function sendSessionMessage(
 	);
 }
 
+/**
+ * Write raw bytes into a live terminal's PTY via the host `terminal.writeInput`
+ * mutation over the relay — the same primitive the desktop/web terminals and the
+ * host's own agent launcher use to type into a session. This is how the mobile
+ * composer talks to a TERMINAL agent (Emilien, `claude`, any PTY agent): those
+ * sessions never open a mastra chat thread, so `chat.sendMessage` 500s for them;
+ * writing the user's text plus a carriage return straight into stdin lands it in
+ * the agent exactly as if typed, and the reply streams back through the terminal.
+ * `terminalId` is resolved from the session id (see `terminalSessionId`). Throws
+ * `HostRequestError` when the host is reached but the terminal is gone.
+ */
+export function writeTerminalInput(
+	routingKey: string,
+	workspaceId: string,
+	terminalId: string,
+	data: string,
+) {
+	return hostTrpcCall<{ success: true }>(
+		routingKey,
+		"terminal.writeInput",
+		{ terminalId, workspaceId, data },
+		"POST",
+	);
+}
+
 // --- Git changes (the Changes tab diff viewer) ----------------------------
 //
 // The workspace's real git state — changed files + per-file diffs — lives in

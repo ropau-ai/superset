@@ -28,7 +28,7 @@ export interface LiveSessionHeaderProps {
 	lastActiveAt: Date;
 	/** Ticking clock (epoch ms) so the duration updates live. */
 	now: number;
-	/** Session token total; `null` renders "—" until a usage source is wired. */
+	/** Session token total; `null` renders nothing until a usage source is wired. */
 	tokens?: AgentTokens | null;
 }
 
