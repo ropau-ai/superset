@@ -1,7 +1,8 @@
-import { RotateCw, TerminalIcon } from "lucide-react-native";
-import { useCallback, useMemo, useRef } from "react";
+import * as Clipboard from "expo-clipboard";
+import { Check, Copy, RotateCw, TerminalIcon } from "lucide-react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { BrailleSpinner } from "@/components/ai-elements/braille-spinner";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -105,6 +106,39 @@ function TerminalBody({ lines }: { lines: string[] }) {
 	);
 }
 
+/** Copies the full retained buffer, with a brief check-mark confirmation. */
+function CopyButton({ getText }: { getText: () => string }) {
+	const [copied, setCopied] = useState(false);
+	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const onPress = useCallback(async () => {
+		try {
+			await Clipboard.setStringAsync(getText());
+			setCopied(true);
+			if (timerRef.current) clearTimeout(timerRef.current);
+			timerRef.current = setTimeout(() => setCopied(false), 1500);
+		} catch {
+			// Clipboard unavailable — no-op rather than throw.
+		}
+	}, [getText]);
+
+	return (
+		<Pressable
+			accessibilityLabel="Copy terminal output"
+			accessibilityRole="button"
+			className="size-8 items-center justify-center rounded-md active:bg-neutral-800"
+			hitSlop={6}
+			onPress={onPress}
+		>
+			<Icon
+				as={copied ? Check : Copy}
+				className={cn("size-3.5", copied ? "text-emerald-400" : "text-neutral-400")}
+				strokeWidth={2}
+			/>
+		</Pressable>
+	);
+}
+
 function TerminalNotice({
 	title,
 	description,
@@ -152,7 +186,9 @@ export interface LiveTerminalProps {
  * The hero panel: a live, auto-scrolling view of the agent's terminal output,
  * streamed over the relay WebSocket. Always dark (a terminal is a terminal),
  * with clear connecting / offline / not-configured states so it never renders
- * a broken void when a data source is missing.
+ * a broken void when a data source is missing. Owns its vertical space — the
+ * caller sizes it (e.g. `flex-1`), and the single inner scroll is the terminal's
+ * own, so there's no same-axis nested scroll fighting the page gesture.
  */
 export function LiveTerminal({
 	stream,
@@ -160,6 +196,7 @@ export function LiveTerminal({
 	className,
 }: LiveTerminalProps) {
 	const { lines, phase, connectionState, terminalTitle, error, retry } = stream;
+	const hasOutput = lines.length > 0;
 
 	const body = (() => {
 		if (phase === "disabled") {
@@ -210,7 +247,7 @@ export function LiveTerminal({
 	return (
 		<View
 			className={cn(
-				"h-96 overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950",
+				"overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950",
 				className,
 			)}
 		>
@@ -226,6 +263,9 @@ export function LiveTerminal({
 				>
 					{terminalTitle?.trim() || "terminal"}
 				</Text>
+				{hasOutput ? (
+					<CopyButton getText={() => lines.join("\n")} />
+				) : null}
 				<ConnectionPill connectionState={connectionState} phase={phase} />
 			</View>
 			<View className="flex-1">{body}</View>
