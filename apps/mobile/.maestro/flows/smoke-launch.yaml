@@ -1,0 +1,14 @@
+# Smoke: the app cold-launches to either the sign-in screen or the cockpit.
+# No backend writes; safe to run anywhere (except Paul's sim / :8090).
+appId: sh.superset.mobile
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: false
+# One of these must be present once JS has booted. RootLayout returns null while
+# the session is pending, so allow a short settle before asserting.
+- extendedWaitUntil:
+    visible:
+      text: "Continue with.*|Emilien|Sign in.*"
+    timeout: 20000

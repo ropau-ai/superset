@@ -1,0 +1,39 @@
+# Smoke: cycle the 4 main tabs and confirm Settings has a working back button.
+# Settings back button is a native header back (verified in code) — this flow guards it.
+appId: sh.superset.mobile
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      text: "Emilien"
+    timeout: 20000
+# Fleet tab
+- tapOn:
+    text: "Fleet"
+- assertVisible:
+    text: "Sessions|No sessions yet"
+# Search tab
+- tapOn:
+    text: "Search"
+- assertVisible:
+    text: "Search your workspaces.*|Search"
+# More tab → Settings → back
+- tapOn:
+    text: "More"
+- assertVisible:
+    text: "Settings"
+- tapOn:
+    text: "Settings"
+- assertVisible:
+    text: "Account|Appearance|Notifications|About"
+- back            # native back on settings/index → returns to More
+- assertVisible:
+    text: "Log out"
+# Back to the Emilien tab
+- tapOn:
+    text: "Emilien"
+- assertVisible:
+    text: "Emilien"

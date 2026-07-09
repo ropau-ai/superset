@@ -1,0 +1,26 @@
+# Auth: use the __DEV__-only dev sign-in button to reach the cockpit.
+# Requires a reachable EXPO_PUBLIC_API_URL (the button hits signIn.email / signUp.email).
+# The dev button only renders in __DEV__ builds (SignInScreen gates it on __DEV__).
+appId: sh.superset.mobile
+tags:
+  - auth
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      text: "Continue with.*|Emilien"
+    timeout: 20000
+# If we're already on the cockpit (session persisted), we're done.
+- runFlow:
+    when:
+      notVisible:
+        text: "Emilien"
+    commands:
+      # Dev sign-in button copy — confirm the exact label and pin it here / add a testID.
+      - tapOn:
+          text: "Dev sign.?in.*|Sign in as.*|Local Admin"
+      - extendedWaitUntil:
+          visible:
+            text: "Emilien"
+          timeout: 20000

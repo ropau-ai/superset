@@ -1,0 +1,35 @@
+# REGRESSION GUARD for P0-1 (docs/qa-e2e-2026-07-09.md).
+#
+# Tapping the Emilien card deep-links into workspace/[id]/chat/[sessionId]. Because
+# chat/_layout has no unstable_settings.initialRouteName and ChatThreadScreen renders
+# no WorkspaceBackButton, there is no visible back affordance — the user is stuck.
+#
+# This flow taps the card, then asserts a back control exists and returns to the cockpit.
+# It is EXPECTED TO FAIL until P0-1 is fixed (add <WorkspaceBackButton/> to ChatThreadScreen
+# and/or initialRouteName:"index" to chat/_layout). When green, the trap is gone.
+#
+# NOTE: only meaningful when an Emilien session exists (card is tappable, not "veille").
+appId: sh.superset.mobile
+tags:
+  - regression
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      text: "Emilien"
+    timeout: 20000
+# Tap the Emilien card. Skip cleanly if the card is in the non-tappable "veille" state.
+- runFlow:
+    when:
+      notVisible:
+        text: "veille"
+    commands:
+      - tapOn:
+          text: "Zuno-Emilien.*|Orchestrator|Emilien"
+          index: 1
+      # We are now on the chat thread. Assert a back affordance is present and usable.
+      # `back` here uses the native back; if none exists this errors → regression caught.
+      - back
+      - assertVisible:
+          text: "Fleet|veille"          # returned to the cockpit
