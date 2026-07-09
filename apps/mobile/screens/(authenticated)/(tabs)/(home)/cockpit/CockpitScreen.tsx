@@ -1,12 +1,15 @@
-import type { SelectChatSession, SelectV2Workspace } from "@superset/db/schema";
+import type {
+	SelectGithubPullRequest,
+	SelectV2Project,
+	SelectV2Workspace,
+} from "@superset/db/schema";
 import { useLiveQuery } from "@tanstack/react-db";
 import { compareDesc } from "date-fns";
 import { useRouter } from "expo-router";
-import { ChevronsUpDown, FolderGit2 } from "lucide-react-native";
+import { ChevronsUpDown } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { EmilienLogo } from "@/components/EmilienLogo";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { useAgentTokens } from "@/hooks/useAgentTokens";
@@ -16,7 +19,6 @@ import {
 	deriveAgentStatus,
 	type LiveAgentStatus,
 	pickActiveBinding,
-	statusForBinding,
 } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
 import { useAgentActivity } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/hooks/useAgentActivity";
 import { useOrganizations } from "@/screens/(authenticated)/hooks/useOrganizations";
@@ -24,11 +26,15 @@ import { useCollections } from "@/screens/(authenticated)/providers/CollectionsP
 import { OrganizationSwitcherSheet } from "../workspaces/components/OrganizationSwitcherSheet";
 import { OrganizationAvatar } from "../workspaces/components/OrganizationSwitcherSheet/components/OrganizationAvatar";
 import { EmilienCard } from "./components/EmilienCard";
-import { type FleetGroupView, FleetSection } from "./components/FleetSection";
+import {
+	type FleetProjectGroup,
+	FleetSection,
+} from "./components/FleetSection";
+import { UserAvatar } from "./components/UserAvatar";
 import { useEmilienSession } from "./hooks/useEmilienSession";
 import { type FleetWorkspaceRef, useFleetAgents } from "./hooks/useFleetAgents";
 
-const NO_WORKSPACE_KEY = "__no_workspace__";
+const EPOCH = new Date(0);
 
 /** Ticking wall clock so durations + staleness re-derive live. */
 function useNow(intervalMs: number): number {
@@ -40,20 +46,19 @@ function useNow(intervalMs: number): number {
 	return now;
 }
 
-function lastActiveAt(session: SelectChatSession): Date {
-	return session.lastActiveAt ?? session.updatedAt ?? session.createdAt;
-}
-
-interface RawFleetGroup {
-	workspace: SelectV2Workspace | null;
-	sessions: SelectChatSession[];
+/** Raw project grouping before per-workspace view data is resolved. */
+interface RawProjectGroup {
+	projectId: string;
+	project: SelectV2Project | null;
+	workspaces: SelectV2Workspace[];
 }
 
 /**
  * The cockpit Home — Emilien-centric. A pinned Emilien hero (live status, tap →
- * chat) sits above the fleet of every other session, grouped by workspace with
- * live agent-type + status pulled from the relay. The old workspace list lives
- * on as a sub-screen reachable from the header.
+ * chat) sits above the fleet: every workspace (branch) in the org except
+ * Emilien's own, grouped by project like the desktop sidebar. Each row carries
+ * its diff, host state, and live agent-type. The header is the org switcher on
+ * the left and the signed-in user's account avatar on the right.
  */
 export function CockpitScreen() {
 	const router = useRouter();
@@ -76,12 +81,16 @@ export function CockpitScreen() {
 
 	const emilien = useEmilienSession();
 
-	const { data: sessions, isReady: sessionsReady } = useLiveQuery(
-		(q) => q.from({ chatSessions: collections.chatSessions }),
+	const { data: workspaces, isReady: workspacesReady } = useLiveQuery(
+		(q) => q.from({ v2Workspaces: collections.v2Workspaces }),
 		[collections],
 	);
-	const { data: workspaces } = useLiveQuery(
-		(q) => q.from({ v2Workspaces: collections.v2Workspaces }),
+	const { data: projects } = useLiveQuery(
+		(q) => q.from({ v2Projects: collections.v2Projects }),
+		[collections],
+	);
+	const { data: pullRequests } = useLiveQuery(
+		(q) => q.from({ githubPullRequests: collections.githubPullRequests }),
 		[collections],
 	);
 	const { data: hosts } = useLiveQuery(
@@ -93,11 +102,24 @@ export function CockpitScreen() {
 		() => new Map((hosts ?? []).map((host) => [host.machineId, host])),
 		[hosts],
 	);
-	const workspacesById = useMemo(
-		() =>
-			new Map((workspaces ?? []).map((workspace) => [workspace.id, workspace])),
-		[workspaces],
+	const projectsById = useMemo(
+		() => new Map((projects ?? []).map((project) => [project.id, project])),
+		[projects],
 	);
+
+	// Best PR per branch (open > merged > closed/draft), for each row's diff badge.
+	const pullRequestsByBranch = useMemo(() => {
+		const byBranch = new Map<string, SelectGithubPullRequest>();
+		const rank = (state: string) =>
+			state === "open" ? 2 : state === "merged" ? 1 : 0;
+		for (const pullRequest of pullRequests ?? []) {
+			const existing = byBranch.get(pullRequest.headBranch);
+			if (!existing || rank(pullRequest.state) > rank(existing.state)) {
+				byBranch.set(pullRequest.headBranch, pullRequest);
+			}
+		}
+		return byBranch;
+	}, [pullRequests]);
 
 	// --- Emilien live status (single-workspace relay poll) ------------------
 	const relayConfigured = isRelayConfigured();
@@ -146,78 +168,72 @@ export function CockpitScreen() {
 		enabled: emilienRelayReady,
 	});
 
-	// --- Fleet: every non-Emilien session, grouped by workspace -------------
-	const rawFleetGroups = useMemo<RawFleetGroup[]>(() => {
-		const emilienSessionId = emilien.session?.id ?? null;
-		const groups = new Map<string, RawFleetGroup>();
-		for (const session of sessions ?? []) {
-			if (emilienSessionId && session.id === emilienSessionId) continue;
-			const workspace = session.v2WorkspaceId
-				? (workspacesById.get(session.v2WorkspaceId) ?? null)
-				: null;
-			const key = workspace?.id ?? NO_WORKSPACE_KEY;
-			let group = groups.get(key);
+	// --- Fleet: every non-Emilien workspace, grouped by project -------------
+	const rawGroups = useMemo<RawProjectGroup[]>(() => {
+		const emilienWorkspaceId = emilien.workspace?.id ?? null;
+		const groups = new Map<string, RawProjectGroup>();
+		for (const workspace of workspaces ?? []) {
+			if (emilienWorkspaceId && workspace.id === emilienWorkspaceId) continue;
+			let group = groups.get(workspace.projectId);
 			if (!group) {
-				group = { workspace, sessions: [] };
-				groups.set(key, group);
+				group = {
+					projectId: workspace.projectId,
+					project: projectsById.get(workspace.projectId) ?? null,
+					workspaces: [],
+				};
+				groups.set(workspace.projectId, group);
 			}
-			group.sessions.push(session);
+			group.workspaces.push(workspace);
 		}
 		for (const group of groups.values()) {
-			group.sessions.sort((a, b) =>
-				compareDesc(lastActiveAt(a), lastActiveAt(b)),
-			);
+			group.workspaces.sort((a, b) => compareDesc(a.updatedAt, b.updatedAt));
 		}
-		return [...groups.values()].sort((a, b) => {
-			if (!a.workspace) return 1;
-			if (!b.workspace) return -1;
-			return compareDesc(
-				lastActiveAt(a.sessions[0]),
-				lastActiveAt(b.sessions[0]),
-			);
-		});
-	}, [sessions, workspacesById, emilien.session?.id]);
+		return [...groups.values()].sort((a, b) =>
+			compareDesc(
+				a.workspaces[0]?.updatedAt ?? EPOCH,
+				b.workspaces[0]?.updatedAt ?? EPOCH,
+			),
+		);
+	}, [workspaces, projectsById, emilien.workspace?.id]);
 
-	// Online fleet workspaces we poll for live agent-type + status (bounded).
+	// Online fleet workspaces we poll for live agent-type (bounded fan-out).
 	const fleetWorkspaceRefs = useMemo<FleetWorkspaceRef[]>(() => {
 		if (!organizationId) return [];
 		const refs: FleetWorkspaceRef[] = [];
-		for (const group of rawFleetGroups) {
-			const workspace = group.workspace;
-			if (!workspace) continue;
-			if (!hostsById.get(workspace.hostId)?.isOnline) continue;
-			refs.push({
-				workspaceId: workspace.id,
-				routingKey: buildHostRoutingKey(organizationId, workspace.hostId),
-			});
+		for (const group of rawGroups) {
+			for (const workspace of group.workspaces) {
+				if (!hostsById.get(workspace.hostId)?.isOnline) continue;
+				refs.push({
+					workspaceId: workspace.id,
+					routingKey: buildHostRoutingKey(organizationId, workspace.hostId),
+				});
+			}
 		}
 		return refs;
-	}, [rawFleetGroups, hostsById, organizationId]);
+	}, [rawGroups, hostsById, organizationId]);
 
 	const fleetAgents = useFleetAgents({
 		workspaces: fleetWorkspaceRefs,
 		enabled: relayConfigured && fleetWorkspaceRefs.length > 0,
 	});
 
-	const fleetGroups = useMemo<FleetGroupView[]>(() => {
-		return rawFleetGroups.map((group) => {
-			const workspace = group.workspace;
-			const host = workspace ? hostsById.get(workspace.hostId) : undefined;
-			const bindings = workspace
-				? (fleetAgents.byWorkspace.get(workspace.id) ?? [])
-				: [];
-			const active = pickActiveBinding(bindings);
-			return {
-				key: workspace?.id ?? NO_WORKSPACE_KEY,
-				workspaceName: workspace?.name ?? "No workspace",
-				branch: workspace?.branch ?? null,
-				hostOnline: host?.isOnline,
-				agentDefinitionId: active?.definitionId ?? null,
-				status: active ? statusForBinding(active, now) : null,
-				sessions: group.sessions,
-			};
-		});
-	}, [rawFleetGroups, hostsById, fleetAgents.byWorkspace, now]);
+	const fleetGroups = useMemo<FleetProjectGroup[]>(() => {
+		return rawGroups.map((group) => ({
+			key: group.projectId,
+			projectName: group.project?.name ?? "Project",
+			projectIconUrl: group.project?.iconUrl ?? null,
+			workspaces: group.workspaces.map((workspace) => {
+				const bindings = fleetAgents.byWorkspace.get(workspace.id) ?? [];
+				const active = pickActiveBinding(bindings);
+				return {
+					workspace,
+					pullRequest: pullRequestsByBranch.get(workspace.branch),
+					hostOnline: hostsById.get(workspace.hostId)?.isOnline,
+					agentDefinitionId: active?.definitionId ?? null,
+				};
+			}),
+		}));
+	}, [rawGroups, fleetAgents.byWorkspace, pullRequestsByBranch, hostsById]);
 
 	const projectLabel = emilien.project
 		? `${emilien.project.name} / ${emilien.workspace?.branch ?? "main"}`
@@ -242,13 +258,18 @@ export function CockpitScreen() {
 				className="flex-row items-center gap-2.5 px-5 pb-3"
 				style={{ paddingTop: insets.top + 6 }}
 			>
-				<EmilienLogo size={26} />
 				<Pressable
-					className="flex-1 flex-row items-center gap-1.5"
+					className="flex-1 flex-row items-center gap-2"
+					hitSlop={6}
 					onPress={() => setSwitcherOpen(true)}
 				>
-					<Text className="font-bold text-xl" numberOfLines={1}>
-						{activeOrganization?.name ?? "Emilien"}
+					<OrganizationAvatar
+						logo={activeOrganization?.logo}
+						name={activeOrganization?.name}
+						size={30}
+					/>
+					<Text className="shrink font-bold text-xl" numberOfLines={1}>
+						{activeOrganization?.name ?? "Organization"}
 					</Text>
 					<Icon
 						as={ChevronsUpDown}
@@ -257,23 +278,15 @@ export function CockpitScreen() {
 					/>
 				</Pressable>
 				<Pressable
+					accessibilityLabel="Account"
+					accessibilityRole="button"
 					hitSlop={8}
-					onPress={() =>
-						router.push("/(authenticated)/(tabs)/(home)/workspaces")
-					}
-					className="p-1"
+					onPress={() => router.navigate("/(authenticated)/(tabs)/(more)")}
 				>
-					<Icon
-						as={FolderGit2}
-						className="size-5 text-muted-foreground"
-						strokeWidth={1.75}
-					/>
-				</Pressable>
-				<Pressable hitSlop={8} onPress={() => setSwitcherOpen(true)}>
-					<OrganizationAvatar
-						logo={activeOrganization?.logo}
-						name={activeOrganization?.name}
-						size={30}
+					<UserAvatar
+						image={authData?.user?.image}
+						name={authData?.user?.name}
+						size={32}
 					/>
 				</Pressable>
 			</View>
@@ -286,7 +299,13 @@ export function CockpitScreen() {
 				<EmilienCard
 					hasSession={!!emilien.session && !!emilien.workspace}
 					hostOnline={emilienHostOnline}
-					lastActiveAt={emilien.session ? lastActiveAt(emilien.session) : null}
+					lastActiveAt={
+						emilien.session
+							? (emilien.session.lastActiveAt ??
+								emilien.session.updatedAt ??
+								emilien.session.createdAt)
+							: null
+					}
 					now={now}
 					onPress={openEmilienChat}
 					projectLabel={projectLabel}
@@ -297,10 +316,9 @@ export function CockpitScreen() {
 
 				<FleetSection
 					groups={fleetGroups}
-					loading={!sessionsReady}
-					now={now}
-					onPressSession={(session) =>
-						router.push(`/(authenticated)/(tabs)/(sessions)/${session.id}`)
+					loading={!workspacesReady}
+					onPressWorkspace={(workspace) =>
+						router.push(`/(authenticated)/workspace/${workspace.id}/chat`)
 					}
 				/>
 			</ScrollView>
