@@ -8,10 +8,10 @@ import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/ui/text";
 import { useTheme } from "@/hooks/useTheme";
 import { AGENT_TYPE_PRESETS } from "@/lib/agentTypes";
-import { EMBER } from "@/lib/theme";
+import { EMBER, withAlpha } from "@/lib/theme";
 import type { NewSessionSheetProps } from "@/screens/(authenticated)/hooks/useNewSession";
 
-const EMBER_TINT = "rgba(240,101,58,0.12)";
+const EMBER_TINT = withAlpha(EMBER, 0.12);
 
 export function NewSessionSheet({
 	isPresented,
@@ -75,8 +75,8 @@ export function NewSessionSheet({
 										<Pressable
 											key={preset.id}
 											onPress={() => onSelectAgentType(preset.id)}
-											hitSlop={{ top: 10, bottom: 10 }}
-											className="rounded-full border px-3.5 py-2"
+											hitSlop={10}
+											className="rounded-full border px-3.5 py-2.5"
 											style={{
 												borderColor: active ? EMBER : theme.border,
 												backgroundColor: active ? EMBER_TINT : "transparent",

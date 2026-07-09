@@ -6,6 +6,7 @@ import { Circle, Cloud, CloudOff } from "lucide-react-native";
 import { useCallback, useMemo } from "react";
 import { SectionList, View } from "react-native";
 import { Icon } from "@/components/ui/icon";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Text } from "@/components/ui/text";
 import { NewSessionSheet } from "@/screens/(authenticated)/components/NewSessionSheet";
 import { useNewSession } from "@/screens/(authenticated)/hooks/useNewSession";
@@ -147,7 +148,21 @@ export function SessionsScreen() {
 								No sessions yet
 							</Text>
 						</View>
-					) : null
+					) : (
+						// Cache-first: hydrating with nothing cached → a row skeleton, not
+						// a blank screen.
+						<View className="gap-2 px-4 pt-5">
+							{[0, 1, 2, 3].map((i) => (
+								<View className="flex-row items-center gap-3 py-2" key={i}>
+									<Skeleton className="size-2 rounded-full" />
+									<View className="flex-1 gap-1.5">
+										<Skeleton className="h-4 w-40" />
+										<Skeleton className="h-3 w-24" />
+									</View>
+								</View>
+							))}
+						</View>
+					)
 				}
 			/>
 			<NewSessionSheet {...newSession.sheetProps} />

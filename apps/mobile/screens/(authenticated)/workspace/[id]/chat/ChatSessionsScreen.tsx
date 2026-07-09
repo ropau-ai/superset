@@ -1,5 +1,5 @@
 import { useLiveQuery } from "@tanstack/react-db";
-import { compareDesc } from "date-fns";
+import { compareDesc, formatDistanceToNow } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { FlatList, Pressable, View } from "react-native";
 import { Text } from "@/components/ui/text";
@@ -48,7 +48,9 @@ export function ChatSessionsScreen() {
 						{item.title ?? "Untitled chat"}
 					</Text>
 					<Text className="text-muted-foreground mt-1 text-xs">
-						{(item.updatedAt ?? item.createdAt).toLocaleString()}
+						{formatDistanceToNow(item.updatedAt ?? item.createdAt, {
+							addSuffix: true,
+						})}
 					</Text>
 				</Pressable>
 			)}

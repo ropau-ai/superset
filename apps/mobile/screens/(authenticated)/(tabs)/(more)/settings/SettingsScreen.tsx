@@ -25,7 +25,7 @@ import {
 	useAgentNotificationsEnabled,
 	useNotificationScope,
 } from "@/lib/notifications";
-import { EMBER } from "@/lib/theme";
+import { EMBER, withAlpha } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useEmilienSession } from "@/screens/(authenticated)/(tabs)/(home)/cockpit/hooks/useEmilienSession";
 import { useOrganizations } from "@/screens/(authenticated)/hooks/useOrganizations";
@@ -218,8 +218,8 @@ export function SettingsScreen() {
 						<View
 							className="size-9 items-center justify-center rounded-xl border"
 							style={{
-								borderColor: "rgba(240,101,58,0.4)",
-								backgroundColor: "rgba(240,101,58,0.1)",
+								borderColor: withAlpha(EMBER, 0.4),
+								backgroundColor: withAlpha(EMBER, 0.1),
 							}}
 						>
 							<EmilienLogo size={22} />

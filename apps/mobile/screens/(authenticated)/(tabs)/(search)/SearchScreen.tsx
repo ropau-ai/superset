@@ -22,13 +22,17 @@ export function SearchScreen() {
 		[collections],
 	);
 
-	const results = useMemo<SelectV2Workspace[]>(() => {
+	const RESULT_CAP = 50;
+	const { results, totalMatches } = useMemo<{
+		results: SelectV2Workspace[];
+		totalMatches: number;
+	}>(() => {
 		const needle = query.trim().toLowerCase();
-		if (!needle) return [];
+		if (!needle) return { results: [], totalMatches: 0 };
 		const projectNames = new Map(
 			(projects ?? []).map((project) => [project.id, project.name]),
 		);
-		return (workspaces ?? [])
+		const matches = (workspaces ?? [])
 			.filter(
 				(workspace) =>
 					workspace.name.toLowerCase().includes(needle) ||
@@ -37,8 +41,11 @@ export function SearchScreen() {
 						.toLowerCase()
 						.includes(needle),
 			)
-			.sort((a, b) => compareDesc(a.updatedAt, b.updatedAt))
-			.slice(0, 50);
+			.sort((a, b) => compareDesc(a.updatedAt, b.updatedAt));
+		return {
+			results: matches.slice(0, RESULT_CAP),
+			totalMatches: matches.length,
+		};
 	}, [workspaces, projects, query]);
 
 	return (
@@ -62,6 +69,14 @@ export function SearchScreen() {
 				keyExtractor={(item) => item.id}
 				contentContainerClassName="p-4 pb-28 gap-2"
 				keyboardDismissMode="on-drag"
+				ListFooterComponent={
+					totalMatches > RESULT_CAP ? (
+						<Text className="pt-4 text-center text-muted-foreground text-xs">
+							Showing the first {RESULT_CAP} of {totalMatches} matches — refine
+							your search to narrow it down.
+						</Text>
+					) : null
+				}
 				ListEmptyComponent={
 					query.trim() && !workspacesReady ? null : (
 						<View className="items-center justify-center py-20">
