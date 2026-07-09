@@ -1,4 +1,4 @@
-import { useColorScheme } from "react-native";
+import { ActivityIndicator } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import type { ButtonProps } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ export type SocialProvider = "github" | "google";
 
 export interface SocialButtonProps extends Omit<ButtonProps, "children"> {
 	provider: SocialProvider;
+	/** Show a spinner and block taps while the OAuth round-trip is in flight. */
+	loading?: boolean;
 }
 
 function GithubIcon({ color }: { color: string }) {
@@ -53,19 +55,26 @@ const PROVIDER_NAME: Record<SocialProvider, string> = {
 export function SocialButton({
 	provider,
 	className,
+	loading = false,
+	disabled,
 	...props
 }: SocialButtonProps) {
-	const colorScheme = useColorScheme();
-	const iconColor = colorScheme === "dark" ? "white" : "black";
+	// The app is force-dark (`userInterfaceStyle: "dark"`), so key the glyph off
+	// the app theme, not `useColorScheme()` (the system scheme) — otherwise a
+	// light-mode device renders a black GitHub glyph on the dark button.
+	const iconColor = "white";
 
 	return (
 		<Button
 			variant="outline"
 			size="lg"
 			className={cn("flex flex-row gap-x-3", className)}
+			disabled={disabled || loading}
 			{...props}
 		>
-			{provider === "github" ? (
+			{loading ? (
+				<ActivityIndicator color={iconColor} size="small" />
+			) : provider === "github" ? (
 				<GithubIcon color={iconColor} />
 			) : (
 				<GoogleIcon />

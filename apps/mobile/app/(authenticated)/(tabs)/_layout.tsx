@@ -11,15 +11,18 @@ export default function TabsLayout() {
 		>
 			<NativeTabs.Trigger name="(home)">
 				<NativeTabs.Trigger.Icon
-					sf={{ default: "house", selected: "house.fill" }}
+					sf={{ default: "circle.circle", selected: "circle.circle.fill" }}
 				/>
-				<NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+				<NativeTabs.Trigger.Label>Emilien</NativeTabs.Trigger.Label>
 			</NativeTabs.Trigger>
-			<NativeTabs.Trigger name="(tasks)">
+			<NativeTabs.Trigger name="(sessions)">
 				<NativeTabs.Trigger.Icon
-					sf={{ default: "list.clipboard", selected: "list.clipboard.fill" }}
+					sf={{
+						default: "rectangle.stack",
+						selected: "rectangle.stack.fill",
+					}}
 				/>
-				<NativeTabs.Trigger.Label>Tasks</NativeTabs.Trigger.Label>
+				<NativeTabs.Trigger.Label>Fleet</NativeTabs.Trigger.Label>
 			</NativeTabs.Trigger>
 			<NativeTabs.Trigger name="(search)" role="search">
 				<NativeTabs.Trigger.Icon sf="magnifyingglass" />

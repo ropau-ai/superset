@@ -33,7 +33,7 @@ export default ({ config }: ConfigContext) => ({
 	android: {
 		adaptiveIcon: {
 			foregroundImage: "./assets/adaptive-icon.png",
-			backgroundColor: "#ffffff",
+			backgroundColor: "#0B0B0F",
 		},
 		package: "sh.superset.mobile",
 		predictiveBackGestureEnabled: false,
@@ -42,7 +42,23 @@ export default ({ config }: ConfigContext) => ({
 		favicon: "./assets/favicon.png",
 		bundler: "metro",
 	},
-	plugins: ["expo-router", "expo-localization"],
+	plugins: [
+		"expo-router",
+		"expo-localization",
+		"expo-notifications",
+		[
+			"expo-speech-recognition",
+			{
+				microphonePermission:
+					"Allow Emilien to use the microphone to dictate your messages.",
+				speechRecognitionPermission:
+					"Allow Emilien to transcribe your voice into text.",
+				androidSpeechServicePackages: [
+					"com.google.android.googlequicksearchbox",
+				],
+			},
+		],
+	],
 	extra: {
 		router: {},
 		eas: {

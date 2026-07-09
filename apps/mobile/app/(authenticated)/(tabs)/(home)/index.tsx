@@ -1,3 +1,3 @@
-import { WorkspacesScreen } from "@/screens/(authenticated)/(tabs)/(home)/workspaces";
+import { CockpitScreen } from "@/screens/(authenticated)/(tabs)/(home)/cockpit";
 
-export default WorkspacesScreen;
+export default CockpitScreen;

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { createContext, useContext, useMemo } from "react";
+import { BrandedLoader } from "@/components/BrandedLoader";
 import { useSession } from "@/lib/auth/client";
 import { getCollections } from "@/lib/collections/collections";
 
@@ -15,8 +16,11 @@ export function CollectionsProvider({ children }: { children: ReactNode }) {
 		return getCollections(activeOrganizationId);
 	}, [activeOrganizationId]);
 
+	// The active organization rides in on the session and can lag a beat behind
+	// auth. Hold on a branded loader rather than rendering nothing (a blank dark
+	// screen) until it resolves.
 	if (!activeOrganizationId) {
-		return null;
+		return <BrandedLoader label="Loading your workspace…" />;
 	}
 
 	return (

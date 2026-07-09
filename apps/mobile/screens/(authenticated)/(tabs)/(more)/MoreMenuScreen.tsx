@@ -1,26 +1,19 @@
 import { useLiveQuery } from "@tanstack/react-db";
 import { useRouter } from "expo-router";
-import {
-	ArrowLeftRight,
-	ChevronRight,
-	LogOut,
-	Settings,
-} from "lucide-react-native";
+import { ArrowLeftRight, ChevronRight, Settings } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { Separator } from "@/components/ui/separator";
 import { Text } from "@/components/ui/text";
-import { useSignOut } from "@/hooks/useSignOut";
 import { authClient } from "@/lib/auth/client";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 
 export function MoreMenuScreen() {
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
-	const { signOut } = useSignOut();
 	const collections = useCollections();
 	const [switching, setSwitching] = useState(false);
 
@@ -41,9 +34,13 @@ export function MoreMenuScreen() {
 		setSwitching(true);
 		try {
 			await authClient.organization.setActive({ organizationId: orgId });
-			router.replace("/(authenticated)/(home)");
+			router.replace("/(authenticated)/(tabs)/(home)");
 		} catch (error) {
 			console.error("[org/switch] Failed to switch organization:", error);
+			Alert.alert(
+				"Couldn't switch organization",
+				"Something went wrong. Check your connection and try again.",
+			);
 		} finally {
 			setSwitching(false);
 		}
@@ -101,14 +98,16 @@ export function MoreMenuScreen() {
 					</View>
 				</View>
 
-				{/* Menu items */}
+				{/* Menu items — Log out lives in Settings › Account (single entry point). */}
 				<View className="gap-2">
 					<Text className="text-xs font-medium text-muted-foreground uppercase px-2">
 						General
 					</Text>
 					<View className="rounded-xl bg-card">
 						<Pressable
-							onPress={() => router.push("/(authenticated)/(more)/settings")}
+							onPress={() =>
+								router.push("/(authenticated)/(tabs)/(more)/settings")
+							}
 							className="flex-row items-center gap-3 px-4 py-3"
 						>
 							<Icon as={Settings} className="text-foreground size-5" />
@@ -117,19 +116,6 @@ export function MoreMenuScreen() {
 								as={ChevronRight}
 								className="text-muted-foreground size-5"
 							/>
-						</Pressable>
-					</View>
-				</View>
-
-				{/* Sign out */}
-				<View className="gap-2">
-					<View className="rounded-xl bg-card">
-						<Pressable
-							onPress={signOut}
-							className="flex-row items-center gap-3 px-4 py-3"
-						>
-							<Icon as={LogOut} className="text-destructive size-5" />
-							<Text className="text-base text-destructive">Log out</Text>
 						</Pressable>
 					</View>
 				</View>

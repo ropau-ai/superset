@@ -9,6 +9,8 @@ import { Stack, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, useWindowDimensions, View } from "react-native";
 import { Text } from "@/components/ui/text";
+import { NewSessionSheet } from "@/screens/(authenticated)/components/NewSessionSheet";
+import { useNewSession } from "@/screens/(authenticated)/hooks/useNewSession";
 import { useOrganizations } from "@/screens/(authenticated)/hooks/useOrganizations";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 import { OrganizationHeaderButton } from "./components/OrganizationHeaderButton";
@@ -32,6 +34,7 @@ export function WorkspacesScreen() {
 		useState<SelectV2Workspace | null>(null);
 	const { width } = useWindowDimensions();
 	const collections = useCollections();
+	const newSession = useNewSession();
 	const {
 		organizations,
 		activeOrganization,
@@ -43,7 +46,7 @@ export function WorkspacesScreen() {
 		(q) => q.from({ v2Workspaces: collections.v2Workspaces }),
 		[collections],
 	);
-	const { data: projects } = useLiveQuery(
+	const { data: projects, isReady: projectsReady } = useLiveQuery(
 		(q) => q.from({ v2Projects: collections.v2Projects }),
 		[collections],
 	);
@@ -134,7 +137,10 @@ export function WorkspacesScreen() {
 				onPress={() => setSheetOpen(true)}
 			/>
 			<Stack.Toolbar placement="right">
-				<Stack.Toolbar.Button icon="square.and.pencil" onPress={() => {}} />
+				<Stack.Toolbar.Button
+					icon="square.and.pencil"
+					onPress={newSession.open}
+				/>
 				<Stack.Toolbar.View>
 					<Pressable
 						hitSlop={8}
@@ -158,10 +164,12 @@ export function WorkspacesScreen() {
 				keyExtractor={(item: SelectV2Workspace) => item.id}
 				renderItem={renderItem}
 				ListEmptyComponent={
-					workspacesReady ? (
+					workspacesReady && projectsReady ? (
 						<View className="items-center justify-center py-20">
 							<Text className="text-center text-muted-foreground">
-								No workspaces in this project yet
+								{sortedProjects.length === 0
+									? "No projects in this organization yet"
+									: "No workspaces in this project yet"}
 							</Text>
 						</View>
 					) : null
@@ -196,6 +204,7 @@ export function WorkspacesScreen() {
 				}}
 				width={width}
 			/>
+			<NewSessionSheet {...newSession.sheetProps} />
 		</>
 	);
 }
