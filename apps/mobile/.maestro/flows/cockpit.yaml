@@ -1,0 +1,15 @@
+# Smoke: the Home cockpit renders the Emilien card + Fleet section.
+# Assumes an authenticated session (run auth-dev-signin first, or a persisted login).
+appId: sh.superset.mobile
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      text: "Emilien"
+    timeout: 20000
+# Fleet section header / veille state — one of these should be present on the cockpit.
+- assertVisible:
+    text: "Fleet|veille|Zuno-Emilien.*"

@@ -1,0 +1,20 @@
+# Maestro workspace config for the Superset mobile app.
+# Docs: https://maestro.mobile.dev
+#
+# The app id matches app.config.ts (ios.bundleIdentifier / android.package).
+appId: sh.superset.mobile
+
+# Run order for `maestro test .maestro` (fastest / least stateful first).
+# Auth-gated flows come after the dev sign-in flow.
+flows:
+  - flows/smoke-launch.yaml
+  - flows/auth-dev-signin.yaml
+  - flows/cockpit.yaml
+  - flows/nav-tabs.yaml
+  - flows/emilien-chat-backbutton.yaml   # REGRESSION GUARD — fails until P0-1 is fixed
+  - flows/new-session.yaml
+
+# Tag groups so CI can run subsets, e.g. `maestro test --include-tags=regression`
+# smoke      — render + navigation, no backend writes
+# auth       — needs a reachable EXPO_PUBLIC_API_URL (dev sign-in)
+# regression — encodes a known P0/P1 bug; expected to FAIL until fixed

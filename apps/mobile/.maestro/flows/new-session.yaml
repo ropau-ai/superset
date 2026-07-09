@@ -1,0 +1,22 @@
+# Smoke: the new-session entry point responds.
+# With 0 cloud workspaces it alerts ("Create a workspace from the desktop app first.");
+# with >=1 it either auto-creates (1) or opens the picker sheet (N). This flow just
+# confirms the entry point is wired and one of those branches happens.
+#
+# NOTE: the trigger for useNewSession().open() may be a header/tab-bar "+" — confirm the
+# control and pin its selector (add a testID). Adjust the first tapOn accordingly.
+appId: sh.superset.mobile
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      text: "Emilien"
+    timeout: 20000
+- tapOn:
+    id: "new-session-button"        # TODO: add this testID to the trigger
+    optional: true
+- assertVisible:
+    text: "No workspaces|Create a workspace.*|Select a workspace|Choose an agent.*"
