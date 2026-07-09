@@ -14,6 +14,44 @@ import {
 export const EMBER = "#F0653A";
 export const EMBER_FOREGROUND = "#FFFFFF";
 
+/**
+ * Semantic status palette — the single source of truth for every live-status
+ * accent (pulses, dots, badges, avatars) so greens/ambers can never drift into
+ * three near-identical shades again. Semantics read the way a cockpit expects:
+ * green = healthy / working / live, amber = wants your attention, sky = a
+ * neutral "connecting", and a muted grey for dormant. Consumed inline (SVG
+ * fills, Reanimated dots) and via `withAlpha` for translucent chrome.
+ */
+export const STATUS_COLORS = {
+	/** Working / healthy / live. */
+	live: "#34D399",
+	/** Waiting for you / needs attention. */
+	waiting: "#FBBF24",
+	/** Connecting / informational. */
+	info: "#38BDF8",
+	/** Idle / dormant. */
+	idle: "#71717A",
+} as const;
+
+/**
+ * GitHub-style diff-stat colors (additions / deletions). A deliberately separate
+ * domain from `STATUS_COLORS` — a "+12 −4" stat is a diff convention, not a live
+ * agent status, so its green must not track the working/live green.
+ */
+export const DIFF_COLORS = {
+	addition: "#3FB950",
+	deletion: "#F85149",
+} as const;
+
+/** Translucent variant of a hex color — for status washes and hairline borders. */
+export function withAlpha(hex: string, alpha: number): string {
+	const h = hex.replace("#", "");
+	const r = Number.parseInt(h.slice(0, 2), 16);
+	const g = Number.parseInt(h.slice(2, 4), 16);
+	const b = Number.parseInt(h.slice(4, 6), 16);
+	return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export const THEME = {
 	light: {
 		background: "hsl(0 0% 100%)",
@@ -46,7 +84,9 @@ export const THEME = {
 	dark: {
 		background: "hsl(0 0% 3.9%)",
 		foreground: "hsl(0 0% 98%)",
-		card: "hsl(0 0% 3.9%)",
+		// Lifted off `background` (was also 3.9%) so `bg-card` surfaces read as a
+		// real elevation in the dark, not a 1px-border trick.
+		card: "hsl(0 0% 7%)",
 		cardForeground: "hsl(0 0% 98%)",
 		popover: "hsl(0 0% 3.9%)",
 		popoverForeground: "hsl(0 0% 98%)",

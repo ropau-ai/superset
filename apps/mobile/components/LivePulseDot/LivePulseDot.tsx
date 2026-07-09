@@ -4,13 +4,15 @@ import Animated, {
 	cancelAnimation,
 	Easing,
 	useAnimatedStyle,
+	useReducedMotion,
 	useSharedValue,
 	withRepeat,
 	withTiming,
 } from "react-native-reanimated";
+import { STATUS_COLORS } from "@/lib/theme";
 
 export interface LivePulseDotProps {
-	/** Dot color (defaults to a live emerald). */
+	/** Dot color (defaults to the live status green). */
 	color?: string;
 	/** Animate when `true`; a steady dot when `false`. */
 	active?: boolean;
@@ -24,14 +26,18 @@ export interface LivePulseDotProps {
  * Reanimated, no layout side effects.
  */
 export function LivePulseDot({
-	color = "#34d399",
+	color = STATUS_COLORS.live,
 	active = true,
 	size = 8,
 }: LivePulseDotProps) {
 	const progress = useSharedValue(0);
+	// Honor the iOS "Reduce Motion" accessibility setting — the dot still reads as
+	// live (steady, full color), it just stops breathing.
+	const reduceMotion = useReducedMotion();
+	const shouldAnimate = active && !reduceMotion;
 
 	useEffect(() => {
-		if (active) {
+		if (shouldAnimate) {
 			progress.value = withRepeat(
 				withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
 				-1,
@@ -42,7 +48,7 @@ export function LivePulseDot({
 			progress.value = 0;
 		}
 		return () => cancelAnimation(progress);
-	}, [active, progress]);
+	}, [shouldAnimate, progress]);
 
 	const style = useAnimatedStyle(() => ({
 		opacity: 0.45 + progress.value * 0.55,
@@ -66,7 +72,7 @@ export function LivePulseDot({
 						borderRadius: size / 2,
 						backgroundColor: color,
 					},
-					active ? style : undefined,
+					shouldAnimate ? style : undefined,
 				]}
 			/>
 		</View>

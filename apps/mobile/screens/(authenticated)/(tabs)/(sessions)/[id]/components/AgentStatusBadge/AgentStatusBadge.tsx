@@ -4,6 +4,7 @@ import Animated, {
 	cancelAnimation,
 	Easing,
 	useAnimatedStyle,
+	useReducedMotion,
 	useSharedValue,
 	withRepeat,
 	withTiming,
@@ -19,23 +20,27 @@ interface StatusStyle {
 	pulse: boolean;
 }
 
+// Cockpit-intuitive semantics: green = working / live / healthy, amber = wants
+// your attention, muted grey = idle / ended. (Previously working read as amber
+// "caution" and idle as green "good" — inverted.) Amber is reserved for
+// waiting, so a glance never mistakes "working" for a warning.
 const STATUS_STYLES: Record<LiveAgentStatusKind, StatusStyle> = {
 	working: {
+		container: "border-emerald-500/30 bg-emerald-500/10",
+		dot: "bg-emerald-400",
+		text: "text-emerald-600 dark:text-emerald-400",
+		pulse: true,
+	},
+	waiting: {
 		container: "border-amber-500/30 bg-amber-500/10",
 		dot: "bg-amber-400",
 		text: "text-amber-600 dark:text-amber-400",
 		pulse: true,
 	},
-	waiting: {
-		container: "border-sky-500/30 bg-sky-500/10",
-		dot: "bg-sky-400",
-		text: "text-sky-600 dark:text-sky-400",
-		pulse: true,
-	},
 	idle: {
-		container: "border-emerald-500/30 bg-emerald-500/10",
-		dot: "bg-emerald-400",
-		text: "text-emerald-600 dark:text-emerald-400",
+		container: "border-border bg-muted",
+		dot: "bg-muted-foreground/60",
+		text: "text-muted-foreground",
 		pulse: false,
 	},
 	ended: {
@@ -60,9 +65,12 @@ function PulsingDot({
 	active: boolean;
 }) {
 	const progress = useSharedValue(0);
+	// Respect iOS "Reduce Motion": a steady dot still conveys the status color.
+	const reduceMotion = useReducedMotion();
+	const shouldAnimate = active && !reduceMotion;
 
 	useEffect(() => {
-		if (active) {
+		if (shouldAnimate) {
 			progress.value = withRepeat(
 				withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }),
 				-1,
@@ -73,7 +81,7 @@ function PulsingDot({
 			progress.value = 0;
 		}
 		return () => cancelAnimation(progress);
-	}, [active, progress]);
+	}, [shouldAnimate, progress]);
 
 	const style = useAnimatedStyle(() => ({
 		opacity: 0.4 + progress.value * 0.6,
@@ -84,7 +92,7 @@ function PulsingDot({
 		<View className="size-2 items-center justify-center">
 			<Animated.View
 				className={cn("size-2 rounded-full", className)}
-				style={active ? style : undefined}
+				style={shouldAnimate ? style : undefined}
 			/>
 		</View>
 	);

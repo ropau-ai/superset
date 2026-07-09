@@ -23,17 +23,14 @@ const AVATAR_TINT: Record<
 	{ container: string; text: string }
 > = {
 	working: {
-		container: "border-amber-500/30 bg-amber-500/10",
-		text: "text-amber-500",
-	},
-	waiting: {
-		container: "border-sky-500/30 bg-sky-500/10",
-		text: "text-sky-500",
-	},
-	idle: {
 		container: "border-emerald-500/30 bg-emerald-500/10",
 		text: "text-emerald-500",
 	},
+	waiting: {
+		container: "border-amber-500/30 bg-amber-500/10",
+		text: "text-amber-500",
+	},
+	idle: { container: "border-border bg-muted", text: "text-muted-foreground" },
 	ended: { container: "border-border bg-muted", text: "text-muted-foreground" },
 	unknown: {
 		container: "border-border bg-muted",

@@ -14,6 +14,7 @@ import {
 import { Linking, Pressable, View } from "react-native";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
+import { DIFF_COLORS } from "@/lib/theme";
 
 const PR_BADGE_CONFIG = {
 	closed: {
@@ -40,8 +41,8 @@ const PR_BADGE_CONFIG = {
 
 type PrBadgeState = keyof typeof PR_BADGE_CONFIG;
 
-const ADDITIONS_COLOR = "#3fb950";
-const DELETIONS_COLOR = "#f85149";
+const ADDITIONS_COLOR = DIFF_COLORS.addition;
+const DELETIONS_COLOR = DIFF_COLORS.deletion;
 
 export function WorkspaceRow({
 	workspace,
