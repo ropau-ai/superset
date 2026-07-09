@@ -50,9 +50,9 @@ export default ({ config }: ConfigContext) => ({
 			"expo-speech-recognition",
 			{
 				microphonePermission:
-					"Autorise Emilien à utiliser le micro pour dicter tes messages.",
+					"Allow Emilien to use the microphone to dictate your messages.",
 				speechRecognitionPermission:
-					"Autorise Emilien à transcrire ta voix en texte.",
+					"Allow Emilien to transcribe your voice into text.",
 				androidSpeechServicePackages: [
 					"com.google.android.googlequicksearchbox",
 				],
