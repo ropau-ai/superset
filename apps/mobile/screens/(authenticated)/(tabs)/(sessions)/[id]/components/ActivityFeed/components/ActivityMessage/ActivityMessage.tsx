@@ -13,6 +13,7 @@ import { useTheme } from "@/hooks/useTheme";
 import type { ChatActivityMessage, ChatMessagePart } from "@/lib/relay/relay";
 import { speakableText } from "@/lib/speech/speakableText";
 import { EMBER } from "@/lib/theme";
+import { stripAnsi } from "../../../../hooks/useTerminalStream/terminalOutput";
 import { ActivityToolCall } from "../ActivityToolCall";
 
 function asRecord(part: ChatMessagePart): Record<string, unknown> {
@@ -21,6 +22,19 @@ function asRecord(part: ChatMessagePart): Record<string, unknown> {
 
 function str(value: unknown): string | undefined {
 	return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Visible prose (assistant/user text, reasoning): like {@link str} but strips
+ * any ANSI/control escapes an agent may have echoed from terminal output —
+ * otherwise raw color codes render as garble. Not used for ids/names, which
+ * must stay byte-exact for tool-call ↔ result matching.
+ */
+function prose(value: unknown): string | undefined {
+	const raw = str(value);
+	if (!raw) return undefined;
+	const cleaned = stripAnsi(raw);
+	return cleaned.length > 0 ? cleaned : undefined;
 }
 
 /** Find the tool_result part matching a tool_call id, searching forward. */
@@ -63,7 +77,7 @@ export function ActivityMessage({
 
 	if (isUser) {
 		const text = content
-			.map((part) => str(asRecord(part).text))
+			.map((part) => prose(asRecord(part).text))
 			.filter((value): value is string => Boolean(value))
 			.join("\n");
 		const attachments = content.filter((part) => {
@@ -97,7 +111,7 @@ export function ActivityMessage({
 		const type = record.type;
 
 		if (type === "text") {
-			const text = str(record.text);
+			const text = prose(record.text);
 			if (text) {
 				nodes.push(
 					<MessageResponse key={`t-${index}`}>{text}</MessageResponse>,
@@ -107,7 +121,7 @@ export function ActivityMessage({
 		}
 
 		if (type === "thinking") {
-			const thinking = str(record.thinking);
+			const thinking = prose(record.thinking);
 			if (thinking) {
 				nodes.push(
 					<Reasoning defaultOpen={false} key={`r-${index}`}>

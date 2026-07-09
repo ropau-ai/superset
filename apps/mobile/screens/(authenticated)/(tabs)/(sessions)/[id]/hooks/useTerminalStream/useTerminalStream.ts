@@ -4,7 +4,11 @@ import {
 	TerminalStreamConnection,
 	type TerminalStreamState,
 } from "./TerminalStreamConnection";
-import { appendTerminalChunk, createUtf8Decoder } from "./terminalOutput";
+import {
+	appendTerminalChunk,
+	createAnsiStripper,
+	createUtf8Decoder,
+} from "./terminalOutput";
 
 const FLUSH_INTERVAL_MS = 60;
 
@@ -30,6 +34,13 @@ interface UseTerminalStreamArgs {
 	workspaceId: string | null;
 	/** Relay reachable (configured + host online) AND the panel is open. */
 	enabled: boolean;
+	/**
+	 * Attach to this exact terminal instead of auto-picking the first live one.
+	 * Used when the caller already resolved the session's terminal (e.g. the chat
+	 * screen streaming a specific terminal agent). When omitted, discovery falls
+	 * back to the first non-exited terminal in the workspace.
+	 */
+	terminalId?: string | null;
 }
 
 /**
@@ -42,6 +53,7 @@ export function useTerminalStream({
 	routingKey,
 	workspaceId,
 	enabled,
+	terminalId,
 }: UseTerminalStreamArgs): TerminalStreamResult {
 	const [lines, setLines] = useState<string[]>([]);
 	const [phase, setPhase] = useState<TerminalStreamPhase>("disabled");
@@ -69,6 +81,9 @@ export function useTerminalStream({
 		let disposed = false;
 		let connection: TerminalStreamConnection | null = null;
 		const decoder = createUtf8Decoder();
+		// Strips ANSI even when a sequence is split across frames — a per-chunk
+		// regex alone leaks the fragments as garble (see createAnsiStripper).
+		const ansi = createAnsiStripper();
 
 		// Re-entering the *same* live terminal (typically flipping back from the
 		// Activity tab) keeps the cached scrollback on screen while we re-attach
@@ -76,7 +91,7 @@ export function useTerminalStream({
 		// internal buffer now and let the replay rebuild it — the visible lines
 		// only swap once fresh output flushes, so there's no "Connecting…" flash
 		// or wiped history. A genuinely new target starts clean.
-		const targetKey = `${routingKey}::${workspaceId}`;
+		const targetKey = `${routingKey}::${workspaceId}::${terminalId ?? ""}`;
 		const resumingSameTarget =
 			targetKey === lastTargetRef.current && linesRef.current.length > 0;
 		lastTargetRef.current = targetKey;
@@ -104,7 +119,12 @@ export function useTerminalStream({
 			try {
 				const { sessions } = await listHostTerminals(routingKey, workspaceId);
 				if (disposed) return;
-				const target = sessions.find((s) => !s.exited) ?? sessions[0] ?? null;
+				// A caller-supplied terminalId pins the exact session (the chat screen
+				// streaming one terminal agent); otherwise fall back to the first live
+				// terminal in the workspace.
+				const target = terminalId
+					? (sessions.find((s) => s.terminalId === terminalId) ?? null)
+					: (sessions.find((s) => !s.exited) ?? sessions[0] ?? null);
 				if (!target) {
 					setPhase("no-terminal");
 					return;
@@ -120,7 +140,7 @@ export function useTerminalStream({
 					},
 					{
 						onBytes: (bytes) => {
-							const text = decoder.decode(bytes);
+							const text = ansi.strip(decoder.decode(bytes));
 							if (!text) return;
 							linesRef.current = appendTerminalChunk(linesRef.current, text);
 							scheduleFlush();
@@ -154,7 +174,7 @@ export function useTerminalStream({
 				flushTimer.current = null;
 			}
 		};
-	}, [routingKey, workspaceId, enabled]);
+	}, [routingKey, workspaceId, enabled, terminalId]);
 
 	return { lines, phase, connectionState, terminalTitle, error, retry };
 }

@@ -35,7 +35,7 @@ function useNow(intervalMs: number): number {
 /** Header + terminal placeholder while the session hydrates (vs. a blank screen). */
 function SessionDetailSkeleton() {
 	return (
-		<View className="flex-1 gap-5 p-6">
+		<View className="flex-1 gap-4 px-4 pt-4 pb-3">
 			<View className="gap-3">
 				<Skeleton className="h-6 w-40" />
 				<View className="flex-row gap-2">
@@ -152,7 +152,9 @@ export function SessionDetailScreen() {
 		// the terminal (or the Activity list) owns the remaining height via flex-1.
 		// This kills the old page-ScrollView-wrapping-a-terminal-ScrollView, whose
 		// same-axis nesting made terminal history scroll the page on iOS.
-		<View className="flex-1 gap-5 bg-background p-6">
+		// Gutter is the app-standard px-4 (the old p-6 was a heavy outlier) so the
+		// terminal gets more width + height.
+		<View className="flex-1 gap-4 bg-background px-4 pt-4 pb-3">
 			<Stack.Screen options={{ title: workspace?.name ?? "Live session" }} />
 			<LiveSessionHeader
 				hostOnline={hostOnline}

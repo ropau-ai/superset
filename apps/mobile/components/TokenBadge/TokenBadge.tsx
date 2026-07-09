@@ -6,7 +6,7 @@ import { type AgentTokens, formatTokenCount } from "@/hooks/useAgentTokens";
 import { cn } from "@/lib/utils";
 
 export interface TokenBadgeProps {
-	/** Usage to display; `null` renders a clean em-dash (no fake numbers). */
+	/** Usage to display; `null` renders nothing at all (no fake placeholder). */
 	tokens: AgentTokens | null;
 	/** Hide the leading coin glyph for the tightest inline rows. */
 	iconless?: boolean;
@@ -23,17 +23,20 @@ function showBreakdown(tokens: AgentTokens): void {
 }
 
 /**
- * Compact token-consumption chip (`12.4k tok`, or `— tok` when no usage source
- * is available). Deliberately discreet — muted, monospace — so it reads as
- * telemetry, not a headline. Backed by `useAgentTokens`, which returns `null`
- * until the backend emits real usage; this component never fabricates a count.
- * When the source breaks usage into input/output, the chip becomes tappable and
- * reveals the breakdown (per the cockpit spec).
+ * Compact token-consumption chip (`12.4k tok`). Deliberately discreet — muted,
+ * monospace — so it reads as telemetry, not a headline. Backed by
+ * `useAgentTokens`, which returns `null` until the backend emits real usage;
+ * this component never fabricates a count, and with no real value it renders
+ * *nothing* (an empty "— tok" placeholder is just clutter). When the source
+ * breaks usage into input/output, the chip becomes tappable and reveals the
+ * breakdown (per the cockpit spec).
  */
 export function TokenBadge({ tokens, iconless, className }: TokenBadgeProps) {
-	const label = tokens ? `${formatTokenCount(tokens.total)} tok` : "— tok";
-	const canBreakDown =
-		tokens != null && (tokens.input != null || tokens.output != null);
+	// No real usage source → render nothing, never a fake em-dash.
+	if (!tokens) return null;
+
+	const label = `${formatTokenCount(tokens.total)} tok`;
+	const canBreakDown = tokens.input != null || tokens.output != null;
 
 	const content = (
 		<>
@@ -50,7 +53,7 @@ export function TokenBadge({ tokens, iconless, className }: TokenBadgeProps) {
 		</>
 	);
 
-	if (canBreakDown && tokens) {
+	if (canBreakDown) {
 		return (
 			<Pressable
 				accessibilityLabel="Token usage breakdown"

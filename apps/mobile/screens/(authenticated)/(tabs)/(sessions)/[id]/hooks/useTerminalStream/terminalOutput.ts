@@ -89,6 +89,88 @@ const ANSI_PATTERN = new RegExp(
 	"g",
 );
 
+// The longest escape sequence we'll hold across frames waiting for its
+// terminator. Real CSI/OSC sequences are short; this only bounds a pathological
+// lone-ESC so `pending` can't grow without limit.
+const MAX_PENDING_ESCAPE = 128;
+
+// Control chars to drop from prose (message text), keeping newline + tab so
+// paragraphs and code blocks keep their shape. Unlike `stripControls` (which is
+// line-oriented and strips newlines too), this is safe for multi-line strings.
+const PROSE_CONTROL_PATTERN = new RegExp(
+	`[${String.fromCharCode(0)}-${String.fromCharCode(8)}${String.fromCharCode(0x0b)}-${String.fromCharCode(0x1f)}${String.fromCharCode(0x7f)}-${String.fromCharCode(0x9f)}]`,
+	"g",
+);
+
+/**
+ * Index where a trailing *unterminated* escape sequence begins, or -1 if the
+ * text doesn't end mid-escape. Detected structurally (not with the strip regex,
+ * which happily matches a truncated `\x1b[38;` as if the `8` were a final byte):
+ * a CSI runs `ESC [` + parameter/intermediate bytes (0x20–0x3f) and only ends at
+ * a final byte (0x40–0x7e); an OSC ends at BEL or ST. If we reach the end of the
+ * text still inside one, the sequence is split across frames.
+ */
+function trailingIncompleteEscape(text: string): number {
+	const start = Math.max(text.lastIndexOf(ESC), text.lastIndexOf(CSI));
+	if (start === -1) return -1;
+	const rest = text.slice(start);
+	let i = 1;
+	if (rest.charCodeAt(0) === 0x1b) {
+		if (rest.length < 2) return start; // lone ESC — need its next byte
+		const second = rest[1];
+		if (second === "]") {
+			// OSC — complete only once its BEL / ST terminator has arrived.
+			const bel = rest.indexOf(BEL, 2);
+			const st = rest.indexOf(`${ESC}\\`, 2);
+			return bel === -1 && st === -1 ? start : -1;
+		}
+		if (second !== "[") return -1; // a 2-byte ESC-x escape is already whole
+		i = 2;
+	}
+	for (; i < rest.length; i++) {
+		const code = rest.charCodeAt(i);
+		if (code >= 0x40 && code <= 0x7e) return -1; // final byte → terminated
+		if (code < 0x20 || code > 0x3f) return -1; // not a CSI byte → give up
+	}
+	return start; // ran out of bytes still inside the sequence
+}
+
+/**
+ * Stateful ANSI stripper that survives escape sequences split across WebSocket
+ * frames. A single color code like `\x1b[38;5;214m` can arrive as `\x1b[38;5;2`
+ * in one frame and `14m✻…` in the next; stripping each frame in isolation (as
+ * the per-chunk regex does) leaves the `14m✻` fragment as visible garble —
+ * exactly why claude's "✻ Thinking… (high effort)" status line rendered as
+ * "4still thinking with xhigh effort". Holding an unterminated trailing escape
+ * back until the next frame completes it fixes that.
+ */
+export function createAnsiStripper(): { strip: (input: string) => string } {
+	let pending = "";
+	return {
+		strip(input: string): string {
+			let text = pending + input;
+			pending = "";
+			const idx = trailingIncompleteEscape(text);
+			// Hold the unterminated tail for the next frame — bounded so a lone ESC
+			// that never terminates can't grow `pending` without limit.
+			if (idx !== -1 && text.length - idx <= MAX_PENDING_ESCAPE) {
+				pending = text.slice(idx);
+				text = text.slice(0, idx);
+			}
+			return text.replace(ANSI_PATTERN, "");
+		},
+	};
+}
+
+/**
+ * One-shot ANSI/control strip for prose (assistant/user message text that may
+ * echo terminal output). Removes escape sequences and stray control bytes while
+ * preserving newlines and tabs, so markdown keeps its shape.
+ */
+export function stripAnsi(input: string): string {
+	return input.replace(ANSI_PATTERN, "").replace(PROSE_CONTROL_PATTERN, "");
+}
+
 /** Drop non-printable C0/C1 control bytes, keeping tab. */
 function stripControls(line: string): string {
 	let out = "";
