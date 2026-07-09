@@ -56,9 +56,10 @@ function hasRenderableContent(message: ChatActivityMessage): boolean {
 export interface ActivityFeedProps {
 	messages: ChatActivityMessage[];
 	phase: SessionActivityPhase;
-	error: string | null;
 	relayConfigured: boolean;
 	hostOnline: boolean | null;
+	/** Tailors the empty-state copy: the Emilien chat vs. the fleet Activity tab. */
+	variant?: "chat" | "activity";
 	/** Id currently spoken aloud (chat only). Absent on the Activity tab. */
 	speakingId?: string | null;
 	/** Toggles read-aloud for an assistant message (chat only). */
@@ -75,12 +76,13 @@ export interface ActivityFeedProps {
 export function ActivityFeed({
 	messages,
 	phase,
-	error,
 	relayConfigured,
 	hostOnline,
+	variant = "activity",
 	speakingId,
 	onToggleSpeak,
 }: ActivityFeedProps) {
+	const isChat = variant === "chat";
 	const visible = useMemo(
 		() => messages.filter(hasRenderableContent),
 		[messages],
@@ -118,10 +120,25 @@ export function ActivityFeed({
 	}
 
 	if (visible.length === 0) {
+		if (phase === "loading") {
+			return (
+				<FeedNotice
+					description={
+						isChat
+							? "Fetching this conversation from the host."
+							: "Reading the agent's live activity from the host."
+					}
+					spinner
+					title={isChat ? "Loading conversation…" : "Loading activity…"}
+				/>
+			);
+		}
+		// A genuine reachability failure. We keep the copy calm and generic — the
+		// poll retries on its own — and never leak the raw `procedure failed (500)`.
 		if (phase === "error") {
 			return (
 				<FeedNotice
-					description={error ?? "Couldn't reach the host. Retrying…"}
+					description="We'll reconnect automatically — hang tight."
 					icon={
 						<Icon
 							as={WifiOff}
@@ -129,25 +146,20 @@ export function ActivityFeed({
 							strokeWidth={1.5}
 						/>
 					}
-					title="Can't reach host"
+					title="Can't reach the host"
 				/>
 			);
 		}
-		if (phase === "loading") {
-			return (
-				<FeedNotice
-					description="Reading the agent's live activity from the host."
-					spinner
-					title="Loading activity…"
-				/>
-			);
-		}
+		// `unavailable` (host reached, no chat thread) and `ready`-but-empty both
+		// land here: nothing to show yet, calmly.
 		return (
 			<FeedNotice
 				description={
-					hostOnline
-						? "Nothing here yet — the agent's commands and file edits will appear as it works."
-						: "No recent agent activity."
+					isChat
+						? "Your conversation with this session will appear here."
+						: hostOnline
+							? "Nothing here yet — the agent's commands and file edits will appear as it works."
+							: "No recent agent activity."
 				}
 				icon={
 					<Icon
@@ -156,7 +168,7 @@ export function ActivityFeed({
 						strokeWidth={1.5}
 					/>
 				}
-				title="No activity yet"
+				title={isChat ? "No messages yet" : "No activity yet"}
 			/>
 		);
 	}

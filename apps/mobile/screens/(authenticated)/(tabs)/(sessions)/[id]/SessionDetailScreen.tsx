@@ -162,11 +162,11 @@ export function SessionDetailScreen() {
 
 						<TabsContent value="activity">
 							<ActivityFeed
-								error={sessionActivity.error}
 								hostOnline={hostOnline}
 								messages={sessionActivity.messages}
 								phase={sessionActivity.phase}
 								relayConfigured={relayConfigured}
+								variant="activity"
 							/>
 						</TabsContent>
 					</Tabs>

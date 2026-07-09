@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import {
 	type ChatActivityMessage,
+	HostRequestError,
 	listSessionMessages,
 } from "@/lib/relay/relay";
 
@@ -10,7 +11,15 @@ import {
 // the timeline live without hammering the host.
 const POLL_INTERVAL_MS = 3_000;
 
-export type SessionActivityPhase = "disabled" | "loading" | "ready" | "error";
+// `unavailable`: the host answered but has no chat thread for this session
+// (terminal agents like Emilien never open a mastra thread) — an empty state,
+// not a failure. `error`: the host couldn't be reached at all.
+export type SessionActivityPhase =
+	| "disabled"
+	| "loading"
+	| "ready"
+	| "unavailable"
+	| "error";
 
 export interface SessionActivityResult {
 	messages: ChatActivityMessage[];
@@ -71,8 +80,15 @@ export function useSessionActivity({
 				setPhase("ready");
 			} catch (err) {
 				if (!activeRef.current) return;
-				setError(err instanceof Error ? err.message : "Failed to reach host");
-				setPhase((prev) => (prev === "ready" ? prev : "error"));
+				// A 5xx from `chat.listMessages` means the host was reached but has no
+				// live chat thread for this session — treat it as "nothing here yet",
+				// not a red error. Only a real reachability failure is an error. Either
+				// way we never surface the raw `procedure failed (500)` string.
+				const noThread = err instanceof HostRequestError && err.status >= 500;
+				setError(noThread ? null : "Couldn't reach the host. Retrying…");
+				setPhase((prev) =>
+					prev === "ready" ? prev : noThread ? "unavailable" : "error",
+				);
 			}
 		};
 

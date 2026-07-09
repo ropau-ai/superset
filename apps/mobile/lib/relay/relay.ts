@@ -9,6 +9,26 @@ import { env } from "../env";
 // mobile bundle) — the cloud's `relay-client.ts` and web's `host-client.ts` do
 // the same.
 
+/**
+ * A host tRPC call that reached the relay and the host, but whose procedure
+ * returned a non-2xx status. `status` lets callers tell "host is unreachable"
+ * (a thrown fetch / no status) apart from "host answered, but this procedure
+ * failed" — e.g. a terminal agent like Emilien has no mastra chat thread, so
+ * `chat.listMessages` 500s even though the host is perfectly online. Callers use
+ * that distinction to degrade to a calm empty state instead of a scary error,
+ * and never render this raw message to the user.
+ */
+export class HostRequestError extends Error {
+	readonly status: number;
+	readonly procedure: string;
+	constructor(procedure: string, status: number) {
+		super(`host ${procedure} failed (${status})`);
+		this.name = "HostRequestError";
+		this.status = status;
+		this.procedure = procedure;
+	}
+}
+
 /** One live terminal PTY session on a host, as returned by the relay. */
 export interface HostTerminalSession {
 	terminalId: string;
@@ -107,7 +127,7 @@ async function hostTrpcCall<TOutput>(
 				: undefined,
 	});
 	if (!response.ok) {
-		throw new Error(`host ${procedure} failed (${response.status})`);
+		throw new HostRequestError(procedure, response.status);
 	}
 
 	const parsed = (await response.json()) as { result?: { data?: unknown } };

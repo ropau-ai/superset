@@ -16,6 +16,7 @@ import { useSession } from "@/lib/auth/client";
 import type { ChatActivityMessage } from "@/lib/relay/relay";
 import {
 	buildHostRoutingKey,
+	HostRequestError,
 	isRelayConfigured,
 	sendSessionMessage,
 } from "@/lib/relay/relay";
@@ -158,11 +159,17 @@ export function ChatThreadScreen() {
 		setDraft("");
 		try {
 			await sendSessionMessage(routingKey, sessionId, workspace.id, content);
-		} catch {
+		} catch (err) {
 			setDraft(content);
+			// The host answering with an error (e.g. a terminal session with no
+			// thread) is a different story from the host being unreachable — say so
+			// without dumping a status code on the user.
+			const reachedHost = err instanceof HostRequestError;
 			Alert.alert(
 				"Message not sent",
-				"Couldn't reach Emilien's host. Check the connection and try again.",
+				reachedHost
+					? "Emilien couldn't take that message right now. Give it a moment and try again."
+					: "Couldn't reach Emilien's host. Check your connection and try again.",
 			);
 		} finally {
 			setSending(false);
@@ -225,13 +232,13 @@ export function ChatThreadScreen() {
 				ref={scrollRef}
 			>
 				<ActivityFeed
-					error={activity.error}
 					hostOnline={hostOnline}
 					messages={activity.messages}
 					onToggleSpeak={ttsAvailable ? handleToggleSpeak : undefined}
 					phase={activity.phase}
 					relayConfigured={relayConfigured}
 					speakingId={speakingId}
+					variant="chat"
 				/>
 			</ScrollView>
 			<ChatComposer
