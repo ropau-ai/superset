@@ -78,7 +78,7 @@ function ScopeSegmented({
 export function SettingsScreen() {
 	const router = useRouter();
 	const { data: authData } = useSession();
-	const { signOut } = useSignOut();
+	const { confirmSignOut } = useSignOut();
 	const {
 		organizations,
 		activeOrganization,
@@ -149,7 +149,7 @@ export function SettingsScreen() {
 					destructive
 					icon={LogOut}
 					label="Log out"
-					onPress={signOut}
+					onPress={confirmSignOut}
 				/>
 			</SettingsSection>
 
