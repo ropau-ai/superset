@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Image, Linking, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Text } from "@/components/ui/text";
 import { signIn } from "@/lib/auth/client";
@@ -12,6 +13,7 @@ const TERMS_URL = "https://superset.sh/terms";
 const PRIVACY_URL = "https://superset.sh/privacy";
 
 export function SignInScreen() {
+	const insets = useSafeAreaInsets();
 	const [error, setError] = useState<string | null>(null);
 
 	const handleSignIn = async (provider: SocialProvider) => {
@@ -30,7 +32,13 @@ export function SignInScreen() {
 	};
 
 	return (
-		<View className="flex-1 items-center justify-center gap-8 bg-background p-6">
+		<View
+			className="flex-1 items-center justify-center gap-8 bg-background px-6"
+			style={{
+				paddingTop: insets.top + 24,
+				paddingBottom: insets.bottom + 24,
+			}}
+		>
 			<Image
 				source={require("@/assets/icon.png")}
 				style={{ width: 80, height: 80, borderRadius: 16 }}

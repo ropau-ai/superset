@@ -202,6 +202,7 @@ export function ActivityMessage({
 				accessibilityRole="button"
 				accessibilityState={{ selected: isSpeaking }}
 				className="mt-0.5 size-7 items-center justify-center self-start rounded-full"
+				hitSlop={10}
 				key="speak"
 				onPress={() => onToggleSpeak?.(message)}
 				style={isSpeaking ? { backgroundColor: `${EMBER}1f` } : undefined}

@@ -75,7 +75,8 @@ export function NewSessionSheet({
 										<Pressable
 											key={preset.id}
 											onPress={() => onSelectAgentType(preset.id)}
-											className="rounded-full border px-3 py-1.5"
+											hitSlop={{ top: 10, bottom: 10 }}
+											className="rounded-full border px-3.5 py-2"
 											style={{
 												borderColor: active ? EMBER : theme.border,
 												backgroundColor: active ? EMBER_TINT : "transparent",
@@ -92,13 +93,17 @@ export function NewSessionSheet({
 								})}
 							</ScrollView>
 
-							<ScrollView style={{ maxHeight: 280 }}>
+							<ScrollView
+								style={{ maxHeight: 280 }}
+								contentContainerStyle={{ paddingBottom: 8 }}
+							>
 								{workspaces.map((workspace) => (
 									<Pressable
 										key={workspace.id}
 										onPress={() => onSelectWorkspace(workspace.id)}
 										disabled={isCreating}
-										className="flex-row items-center gap-2.5 py-2.5"
+										hitSlop={6}
+										className="flex-row items-center gap-2.5 py-3"
 										style={{ opacity: isCreating ? 0.5 : 1 }}
 									>
 										<View className="flex-1">
