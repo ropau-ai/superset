@@ -72,9 +72,8 @@ export function useAgentNotificationsEnabled(): AgentNotificationsPreference {
 // or every sub-agent. Same SecureStore + pub/sub shape as the enabled toggle.
 // Defaults to the whole fleet (today's behavior).
 //
-// TODO(watcher): AgentNotificationWatcher does not yet read this scope — wire it
-// so `emilien` suppresses sub-agent notifications. Persisted + surfaced now so
-// the preference is real and ready.
+// Honored by `AgentNotificationWatcher`: `emilien` suppresses every notification
+// except Emilien's own workspace; `fleet` notifies for all.
 
 const SCOPE_STORAGE_KEY = "superset-agent-notifications-scope";
 

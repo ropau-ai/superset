@@ -6,12 +6,11 @@ import type {
 } from "@superset/db/schema";
 import { useLiveQuery } from "@tanstack/react-db";
 import { useMemo } from "react";
+import {
+	resolveEmilienProject,
+	resolveEmilienWorkspace,
+} from "@/lib/emilien";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
-
-// The orchestrator lives in the "Zuno-Emilien" project's main workspace. We
-// match the project by name (exact, then case-insensitive) and pick its `main`
-// workspace (by type, then by branch === "main", then most-recently-touched).
-const EMILIEN_PROJECT_NAME = "Zuno-Emilien";
 
 export interface EmilienContext {
 	project: SelectV2Project | null;
@@ -59,26 +58,8 @@ export function useEmilienSession(): EmilienContext {
 
 	return useMemo<EmilienContext>(() => {
 		const allProjects = projects ?? [];
-		const project =
-			allProjects.find((p) => p.name === EMILIEN_PROJECT_NAME) ??
-			allProjects.find(
-				(p) => p.name.toLowerCase() === EMILIEN_PROJECT_NAME.toLowerCase(),
-			) ??
-			null;
-
-		let workspace: SelectV2Workspace | null = null;
-		if (project) {
-			const projectWorkspaces = (workspaces ?? []).filter(
-				(w) => w.projectId === project.id,
-			);
-			workspace =
-				projectWorkspaces.find((w) => w.type === "main") ??
-				projectWorkspaces.find((w) => w.branch === "main") ??
-				[...projectWorkspaces].sort(
-					(a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
-				)[0] ??
-				null;
-		}
+		const project = resolveEmilienProject(allProjects);
+		const workspace = resolveEmilienWorkspace(allProjects, workspaces ?? []);
 
 		let session: SelectChatSession | null = null;
 		if (workspace) {

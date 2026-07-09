@@ -7,6 +7,7 @@ import { useLiveQuery } from "@tanstack/react-db";
 import { useEffect, useMemo, useRef } from "react";
 import { AppState } from "react-native";
 import { getCollections } from "@/lib/collections/collections";
+import { resolveEmilienWorkspace } from "@/lib/emilien";
 import {
 	buildHostRoutingKey,
 	listWorkspaceAgents,
@@ -21,6 +22,7 @@ import {
 	hasAgentNotificationPermission,
 	presentAgentNotification,
 } from "./notifier";
+import { useNotificationScope } from "./preferences";
 
 // Root-mounted, render-nothing watcher. It consumes the same live agent state as
 // the Live Session screen — Electric-synced sessions/workspaces/hosts to know
@@ -120,6 +122,8 @@ export function AgentNotificationWatcher({
 		[organizationId],
 	);
 
+	const { scope } = useNotificationScope();
+
 	const { data: sessions } = useLiveQuery(
 		(q) => q.from({ chatSessions: collections.chatSessions }),
 		[collections],
@@ -130,6 +134,10 @@ export function AgentNotificationWatcher({
 	);
 	const { data: hosts } = useLiveQuery(
 		(q) => q.from({ v2Hosts: collections.v2Hosts }),
+		[collections],
+	);
+	const { data: projects } = useLiveQuery(
+		(q) => q.from({ v2Projects: collections.v2Projects }),
 		[collections],
 	);
 
@@ -147,6 +155,18 @@ export function AgentNotificationWatcher({
 	// Latest targets read inside the interval without restarting it.
 	const targetsRef = useRef<PollTarget[]>(targets);
 	targetsRef.current = targets;
+
+	// Granularity control (Settings → Notifications). `emilien` suppresses every
+	// notification except Emilien's own workspace; `fleet` notifies for all. Read
+	// through refs so the running poll honors a change without restarting.
+	const emilienWorkspaceId = useMemo(
+		() => resolveEmilienWorkspace(projects ?? [], workspaces ?? [])?.id ?? null,
+		[projects, workspaces],
+	);
+	const scopeRef = useRef(scope);
+	scopeRef.current = scope;
+	const emilienWorkspaceIdRef = useRef(emilienWorkspaceId);
+	emilienWorkspaceIdRef.current = emilienWorkspaceId;
 
 	// Last-seen lifecycle kind per agent, so we only notify on real transitions.
 	const prevKindsRef = useRef<Map<string, LiveAgentStatusKind>>(new Map());
@@ -192,6 +212,20 @@ export function AgentNotificationWatcher({
 			prevKindsRef.current = next;
 			if (events.length === 0) return;
 
+			// Granularity: `emilien` keeps only Emilien's-own-workspace events (and
+			// suppresses everything if we can't yet resolve which workspace that is —
+			// "Emilien only" errs toward silence, never toward the whole fleet). The
+			// lifecycle baseline `next` was already committed above for every agent,
+			// so flipping back to `fleet` won't replay a burst of missed transitions.
+			const emilienId = emilienWorkspaceIdRef.current;
+			const scopedEvents =
+				scopeRef.current === "emilien"
+					? emilienId
+						? events.filter((event) => event.workspaceId === emilienId)
+						: []
+					: events;
+			if (scopedEvents.length === 0) return;
+
 			// Only present if the user already granted permission — never prompt
 			// from a background poll.
 			if (!(await hasAgentNotificationPermission())) return;
@@ -199,7 +233,7 @@ export function AgentNotificationWatcher({
 			const targetByWorkspace = new Map(
 				currentTargets.map((target) => [target.workspaceId, target]),
 			);
-			for (const event of events) {
+			for (const event of scopedEvents) {
 				const target = targetByWorkspace.get(event.workspaceId);
 				if (!target) continue;
 				const { title, body } = notificationCopy(event.kind, target);
