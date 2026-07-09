@@ -4,9 +4,10 @@ import { ChevronRight, Cloud, CloudOff, Layers } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { AgentTypeChip } from "@/components/AgentTypeChip";
 import { LivePulseDot } from "@/components/LivePulseDot";
-import { TokenBadge } from "@/components/TokenBadge";
 import { Icon } from "@/components/ui/icon";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Text } from "@/components/ui/text";
+import { STATUS_COLORS } from "@/lib/theme";
 import type { LiveAgentStatus } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
 import { AgentStatusBadge } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/AgentStatusBadge";
 
@@ -28,6 +29,8 @@ export interface FleetGroupView {
 export interface FleetSectionProps {
 	groups: FleetGroupView[];
 	now: number;
+	/** Data still hydrating with nothing cached yet — show a skeleton, not "empty". */
+	loading?: boolean;
 	onPressSession: (session: SelectChatSession) => void;
 }
 
@@ -52,20 +55,21 @@ function FleetRow({
 			className="flex-row items-center gap-3 rounded-xl px-3 py-2.5 active:bg-accent"
 			onPress={onPress}
 		>
-			<LivePulseDot active={hot} color={hot ? "#34d399" : "#52525b"} size={7} />
+			<LivePulseDot
+				active={hot}
+				color={hot ? STATUS_COLORS.live : STATUS_COLORS.idle}
+				size={7}
+			/>
 			<View className="flex-1 gap-0.5">
 				<Text className="font-medium text-sm" numberOfLines={1}>
 					{session.title ?? "Untitled session"}
 				</Text>
-				<View className="flex-row items-center gap-2">
-					<Text className="text-muted-foreground text-xs" numberOfLines={1}>
-						{formatDistanceToNow(at, { addSuffix: true })}
-					</Text>
-					<Text className="text-muted-foreground text-xs">·</Text>
-					{/* A fleet row's session isn't open, so the host has no live
-					    runtime to sum — honest "—" (real usage shows once opened). */}
-					<TokenBadge tokens={null} />
-				</View>
+				{/* A fleet row's session isn't open, so there's no live runtime to sum
+				    tokens from — rather than a column of honest-but-noisy "— tok", we
+				    show just the activity time (real usage appears once opened). */}
+				<Text className="text-muted-foreground text-xs" numberOfLines={1}>
+					{formatDistanceToNow(at, { addSuffix: true })}
+				</Text>
 			</View>
 			<Icon
 				as={ChevronRight}
@@ -139,14 +143,35 @@ function FleetGroup({
 	);
 }
 
+/** A calm 2-row placeholder while the fleet hydrates on a cold start. */
+function FleetSkeleton() {
+	return (
+		<View className="gap-3">
+			{[0, 1].map((i) => (
+				<View
+					className="gap-2 rounded-2xl border border-border bg-card p-3"
+					key={i}
+				>
+					<Skeleton className="h-3 w-32" />
+					<Skeleton className="h-9 w-full rounded-xl" />
+					<Skeleton className="h-9 w-full rounded-xl" />
+				</View>
+			))}
+		</View>
+	);
+}
+
 /**
  * The fleet: every non-Emilien session, grouped by workspace and sorted by
  * activity, with the workspace's live agent-type + status pulled from the relay.
- * Renders Emilien's calm empty state when the fleet is idle.
+ * Cache-first: shows whatever groups it already has. With nothing cached it
+ * distinguishes still-loading (skeleton) from genuinely-idle (Emilien's calm
+ * empty state) so a cold start never claims the fleet is idle mid-hydration.
  */
 export function FleetSection({
 	groups,
 	now,
+	loading = false,
 	onPressSession,
 }: FleetSectionProps) {
 	const sessionCount = groups.reduce((sum, g) => sum + g.sessions.length, 0);
@@ -170,16 +195,20 @@ export function FleetSection({
 			</View>
 
 			{groups.length === 0 ? (
-				<View className="items-center gap-2 rounded-2xl border border-border border-dashed px-6 py-10">
-					<LivePulseDot active color="#34d399" size={9} />
-					<Text className="text-center font-medium text-sm">
-						Emilien veille.
-					</Text>
-					<Text className="max-w-xs text-center text-muted-foreground text-xs">
-						Aucun sous-agent actif. La flotte apparaîtra ici dès qu'Emilien
-						lancera un run.
-					</Text>
-				</View>
+				loading ? (
+					<FleetSkeleton />
+				) : (
+					<View className="items-center gap-2 rounded-2xl border border-border border-dashed px-6 py-10">
+						<LivePulseDot active color={STATUS_COLORS.live} size={9} />
+						<Text className="text-center font-medium text-sm">
+							Emilien is watching.
+						</Text>
+						<Text className="max-w-xs text-center text-muted-foreground text-xs">
+							No sub-agents running. The fleet appears here the moment Emilien
+							kicks off a run.
+						</Text>
+					</View>
+				)
 			) : (
 				<View className="gap-3">
 					{groups.map((group) => (

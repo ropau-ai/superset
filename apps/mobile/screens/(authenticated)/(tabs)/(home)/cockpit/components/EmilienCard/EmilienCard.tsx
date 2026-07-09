@@ -7,13 +7,13 @@ import { TokenBadge } from "@/components/TokenBadge";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import type { AgentTokens } from "@/hooks/useAgentTokens";
-import { EMBER } from "@/lib/theme";
+import { EMBER, STATUS_COLORS, withAlpha } from "@/lib/theme";
 import type { LiveAgentStatus } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
 import { AgentStatusBadge } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/AgentStatusBadge";
 
-const EMBER_BORDER = "rgba(240,101,58,0.42)";
-const EMBER_WASH = "rgba(240,101,58,0.06)";
-const EMBER_TILE = "rgba(240,101,58,0.12)";
+const EMBER_BORDER = withAlpha(EMBER, 0.42);
+const EMBER_WASH = withAlpha(EMBER, 0.06);
+const EMBER_TILE = withAlpha(EMBER, 0.12);
 
 function formatUptime(ms: number): string {
 	const totalMinutes = Math.max(0, Math.floor(ms / 60000));
@@ -62,13 +62,13 @@ export function EmilienCard({
 }: EmilienCardProps) {
 	const online = hostOnline === true;
 	const live = online && status.kind !== "ended";
-	const dotColor = online ? "#34d399" : "#71717a";
+	const dotColor = online ? STATUS_COLORS.live : STATUS_COLORS.idle;
 
 	const activityLine = hasSession
 		? lastActiveAt
 			? `Last active ${formatDistanceToNow(lastActiveAt, { addSuffix: true })}`
 			: "Live conversation ready — tap to open."
-		: "Emilien veille — no live conversation yet.";
+		: "Emilien is watching — no live conversation yet.";
 
 	return (
 		<Pressable

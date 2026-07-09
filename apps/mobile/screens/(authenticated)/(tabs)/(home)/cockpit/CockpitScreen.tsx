@@ -62,7 +62,9 @@ export function CockpitScreen() {
 	const { width } = useWindowDimensions();
 	const { data: authData } = useSession();
 	const organizationId = authData?.session?.activeOrganizationId ?? null;
-	const now = useNow(1000);
+	// Durations ("up 2h 14m", "last active…") only need a coarse tick; a 1s clock
+	// re-rendered the whole cockpit every second (battery on a left-open screen).
+	const now = useNow(20_000);
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 
 	const {
@@ -74,7 +76,7 @@ export function CockpitScreen() {
 
 	const emilien = useEmilienSession();
 
-	const { data: sessions } = useLiveQuery(
+	const { data: sessions, isReady: sessionsReady } = useLiveQuery(
 		(q) => q.from({ chatSessions: collections.chatSessions }),
 		[collections],
 	);
@@ -116,7 +118,7 @@ export function CockpitScreen() {
 	});
 	const emilienStatus = useMemo<LiveAgentStatus>(() => {
 		if (!relayConfigured || emilienHostOnline === null) {
-			return { kind: "idle", label: "Veille" };
+			return { kind: "idle", label: "Idle" };
 		}
 		if (emilienHostOnline === false) {
 			return { kind: "ended", label: "Host offline" };
@@ -295,6 +297,7 @@ export function CockpitScreen() {
 
 				<FleetSection
 					groups={fleetGroups}
+					loading={!sessionsReady}
 					now={now}
 					onPressSession={(session) =>
 						router.push(`/(authenticated)/(tabs)/(sessions)/${session.id}`)
