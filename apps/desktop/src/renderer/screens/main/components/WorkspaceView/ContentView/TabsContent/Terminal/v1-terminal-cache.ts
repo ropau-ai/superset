@@ -11,6 +11,10 @@ import {
 } from "renderer/lib/terminal/parser-idle-gate";
 import { getTerminalParkingContainer } from "renderer/lib/terminal/terminal-parking";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import {
+	clearPaneActivity,
+	recordPaneActivity,
+} from "renderer/stores/tabs/pane-activity";
 import { DEBUG_TERMINAL } from "./config";
 import { type CreateTerminalOptions, createTerminalInWrapper } from "./helpers";
 import type { TerminalStreamEvent } from "./types";
@@ -282,6 +286,12 @@ export function startStream(paneId: string): void {
 
 	entry.subscription = electronTrpcClient.terminal.stream.subscribe(paneId, {
 		onData: (event: TerminalStreamEvent) => {
+			// Record PTY output as activity for the stale-status safety net. This
+			// is the single chokepoint that sees output whether or not the pane's
+			// React component is mounted.
+			if (event.type === "data") {
+				recordPaneActivity(paneId);
+			}
 			routeEvent(entry, event);
 		},
 		onError: (error: unknown) => {
@@ -373,6 +383,7 @@ export function dispose(paneId: string): void {
 	entry.wrapper.remove();
 	entry.xterm.dispose();
 	cache.delete(paneId);
+	clearPaneActivity(paneId);
 }
 
 // Preserve cache across Vite HMR in dev so active terminals aren't orphaned.

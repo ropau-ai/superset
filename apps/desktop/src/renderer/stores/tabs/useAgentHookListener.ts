@@ -1,9 +1,15 @@
 import { useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { navigateToWorkspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
 import { NOTIFICATION_EVENTS } from "shared/constants";
 import { debugLog } from "shared/debug";
-import { resolveStopPaneStatus } from "./agent-status";
+import { reconcileStaleStatus, resolveStopPaneStatus } from "./agent-status";
+import {
+	getLastPaneActivity,
+	recordPaneActivity,
+	STALE_WORKING_THRESHOLD_MS,
+} from "./pane-activity";
 import { useTabsStore } from "./store";
 import { resolveNotificationTarget } from "./utils/resolve-notification-target";
 
@@ -30,8 +36,44 @@ import { resolveNotificationTarget } from "./utils/resolve-notification-target";
  *    continues until the agent stops or terminal exits.
  *
  * Note: Terminal exit detection (in Terminal.tsx) provides a reliable fallback
- * for clearing stuck indicators when agent hooks fail to fire.
+ * for clearing stuck indicators when agent hooks fail to fire — but only when
+ * the process actually exits. The three leaks above (Ctrl+C, denied permission,
+ * tool fail) can leave a pane "working" forever. `useStaleStatusWatcher` is a
+ * time-based safety net on top: after STALE_WORKING_THRESHOLD_MS of "working"
+ * with no PTY output it degrades the pane to "stale" (dismissable, self-heals on
+ * new output). It does not touch the hooks themselves.
  */
+
+/** Poll interval for the stale-status safety net. */
+const STALE_WATCH_INTERVAL_MS = 30_000;
+
+/**
+ * Safety net for the documented hook leaks: periodically flag panes that have
+ * been "working" with no PTY activity for too long as "stale", and heal ones
+ * that have resumed producing output back to "working".
+ */
+export function useStaleStatusWatcher() {
+	useEffect(() => {
+		const tick = () => {
+			const state = useTabsStore.getState();
+			const now = Date.now();
+			for (const pane of Object.values(state.panes)) {
+				if (pane.status !== "working" && pane.status !== "stale") continue;
+				const next = reconcileStaleStatus({
+					currentStatus: pane.status,
+					lastActivity: getLastPaneActivity(pane.id),
+					now,
+					thresholdMs: STALE_WORKING_THRESHOLD_MS,
+				});
+				if (next && next !== pane.status) {
+					state.setPaneStatus(pane.id, next);
+				}
+			}
+		};
+		const interval = setInterval(tick, STALE_WATCH_INTERVAL_MS);
+		return () => clearInterval(interval);
+	}, []);
+}
 
 /**
  * Returns the current workspace ID from the live URL hash.
@@ -73,6 +115,9 @@ export function useAgentHookListener() {
 				const { eventType } = lifecycleEvent;
 
 				if (eventType === "Start") {
+					// Seed the stale-watcher clock so a freshly-started agent is not
+					// flagged before it has had a chance to produce output.
+					recordPaneActivity(paneId);
 					state.setPaneStatus(paneId, "working");
 				} else if (
 					eventType === "PermissionRequest" ||
@@ -123,7 +168,8 @@ export function useAgentHookListener() {
 				const currentPane = state.panes[paneId];
 				if (
 					currentPane?.status === "working" ||
-					currentPane?.status === "permission"
+					currentPane?.status === "permission" ||
+					currentPane?.status === "stale"
 				) {
 					state.setPaneStatus(paneId, "idle");
 				}

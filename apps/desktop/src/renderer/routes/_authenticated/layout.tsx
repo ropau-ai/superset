@@ -29,7 +29,10 @@ import { V1ImportModal } from "renderer/routes/_authenticated/components/V1Impor
 import { WorkspaceInitEffects } from "renderer/screens/main/components/WorkspaceInitEffects";
 import { useSettingsStore } from "renderer/stores/settings-state";
 import { useTabsStore } from "renderer/stores/tabs/store";
-import { useAgentHookListener } from "renderer/stores/tabs/useAgentHookListener";
+import {
+	useAgentHookListener,
+	useStaleStatusWatcher,
+} from "renderer/stores/tabs/useAgentHookListener";
 import { setPaneWorkspaceRunState } from "renderer/stores/tabs/workspace-run";
 import { useWorkspaceInitStore } from "renderer/stores/workspace-init";
 import { MOCK_ORG_ID, NOTIFICATION_EVENTS } from "shared/constants";
@@ -71,6 +74,7 @@ function AuthenticatedLayout() {
 		: session?.session?.activeOrganizationId;
 
 	useAgentHookListener();
+	useStaleStatusWatcher();
 	useUpdateListener();
 
 	// Update workspace-run pane state on terminal exit

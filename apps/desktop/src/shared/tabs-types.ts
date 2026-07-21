@@ -22,8 +22,16 @@ export type PaneType =
  * - working: Agent actively processing (amber)
  * - permission: Agent blocked, needs user action (red)
  * - review: Agent completed, ready for review (green)
+ * - stale: Agent stuck in "working" with no PTY activity for a while — a
+ *   safety net for the hook leaks (Ctrl+C, denied permission, tool fail) that
+ *   never emit a Stop. Dismissable by acknowledgement; self-heals on new output.
  */
-export type PaneStatus = "idle" | "working" | "permission" | "review";
+export type PaneStatus =
+	| "idle"
+	| "working"
+	| "permission"
+	| "review"
+	| "stale";
 
 /** Non-idle status for UI indicators */
 export type ActivePaneStatus = Exclude<PaneStatus, "idle">;
@@ -35,8 +43,9 @@ export type ActivePaneStatus = Exclude<PaneStatus, "idle">;
 export const STATUS_PRIORITY = {
 	idle: 0,
 	review: 1,
-	working: 2,
-	permission: 3,
+	stale: 2,
+	working: 3,
+	permission: 4,
 } as const satisfies Record<PaneStatus, number>;
 
 /**
@@ -79,12 +88,13 @@ export function getHighestPriorityStatus(
  * (e.g. clicking a tab, focusing a pane, selecting a workspace).
  *
  * - "review"     → "idle"    (user saw the completion)
+ * - "stale"      → "idle"    (user dismissed the stuck-indicator by looking)
  * - "permission" → unchanged (persists until agent resumes)
  * - "working"    → unchanged (persists until agent stops)
  * - "idle"       → unchanged
  */
 export function acknowledgedStatus(status: PaneStatus | undefined): PaneStatus {
-	if (status === "review") return "idle";
+	if (status === "review" || status === "stale") return "idle";
 	return status ?? "idle";
 }
 
