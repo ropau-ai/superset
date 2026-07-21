@@ -29,6 +29,8 @@ export const STATUS_COLORS = {
 	waiting: "#FBBF24",
 	/** Connecting / informational. */
 	info: "#38BDF8",
+	/** Failed / host offline — a live agent you may have just lost. */
+	offline: "#F87171",
 	/** Idle / dormant. */
 	idle: "#71717A",
 } as const;

@@ -63,7 +63,7 @@ export async function ensureAgentNotificationPermission(): Promise<boolean> {
 		if (current.granted) return true;
 		if (current.canAskAgain === false) return false;
 		const requested = await Notifications.requestPermissionsAsync({
-			ios: { allowAlert: true, allowBadge: false, allowSound: true },
+			ios: { allowAlert: true, allowBadge: true, allowSound: true },
 		});
 		return requested.granted;
 	} catch {
@@ -77,6 +77,19 @@ export async function hasAgentNotificationPermission(): Promise<boolean> {
 		return (await Notifications.getPermissionsAsync()).granted;
 	} catch {
 		return false;
+	}
+}
+
+/**
+ * Mirror the number of agents currently waiting on the user onto the app icon
+ * badge, so a locked phone still answers "does anything need me?". Best-effort:
+ * a denied badge permission or unlinked module no-ops.
+ */
+export async function setAppBadgeCount(count: number): Promise<void> {
+	try {
+		await Notifications.setBadgeCountAsync(count);
+	} catch {
+		// Badge is decoration on top of the notifications themselves — never throw.
 	}
 }
 

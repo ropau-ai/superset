@@ -15,12 +15,14 @@ import {
 } from "@/lib/relay/relay";
 import type { LiveAgentStatusKind } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
 import {
+	type AgentNotificationEvent,
 	type AgentNotificationKind,
 	diffAgentEvents,
 } from "./agentNotificationEvents";
 import {
 	hasAgentNotificationPermission,
 	presentAgentNotification,
+	setAppBadgeCount,
 } from "./notifier";
 import { useNotificationScope } from "./preferences";
 
@@ -44,6 +46,12 @@ interface PollTarget {
 	/** Representative (most-recently-active) session to deep-link to. */
 	sessionId: string;
 	sessionTitle: string | null;
+	/**
+	 * Whether the workspace's host is currently online. Offline targets are not
+	 * polled (they can't answer) but are kept so the watcher can notice a host
+	 * dropping offline underneath an active agent — the observable failure mode.
+	 */
+	hostOnline: boolean;
 }
 
 function sessionRecency(session: SelectChatSession): number {
@@ -81,13 +89,14 @@ function buildPollTargets(
 		const workspace = workspaceById.get(workspaceId);
 		if (!workspace) continue;
 		const host = hostByMachine.get(workspace.hostId);
-		if (!host || !host.isOnline) continue;
+		if (!host) continue;
 		targets.push({
 			workspaceId,
 			routingKey: buildHostRoutingKey(organizationId, workspace.hostId),
 			workspaceName: workspace.name ?? "Workspace",
 			sessionId: session.id,
 			sessionTitle: session.title ?? null,
+			hostOnline: host.isOnline === true,
 		});
 	}
 	return targets;
@@ -104,6 +113,12 @@ function notificationCopy(
 		return {
 			title: `${label} needs you`,
 			body: `Waiting for your approval${suffix}`,
+		};
+	}
+	if (kind === "offline") {
+		return {
+			title: `${label} unreachable`,
+			body: `Host went offline while the agent was active${suffix}`,
 		};
 	}
 	return {
@@ -186,30 +201,69 @@ export function AgentNotificationWatcher({
 		const poll = async () => {
 			if (cancelled || AppState.currentState !== "active") return;
 			const currentTargets = targetsRef.current;
-			if (currentTargets.length === 0) return;
+			if (currentTargets.length === 0) {
+				if (prevKindsRef.current.size > 0) {
+					prevKindsRef.current = new Map();
+					void setAppBadgeCount(0);
+				}
+				return;
+			}
 
 			const bindings: TerminalAgentBinding[] = [];
 			await Promise.all(
-				currentTargets.map(async (target) => {
-					try {
-						const result = await listWorkspaceAgents(
-							target.routingKey,
-							target.workspaceId,
-						);
-						bindings.push(...result);
-					} catch {
-						// Host unreachable this tick — skip it, retry next interval.
-					}
-				}),
+				currentTargets
+					.filter((target) => target.hostOnline)
+					.map(async (target) => {
+						try {
+							const result = await listWorkspaceAgents(
+								target.routingKey,
+								target.workspaceId,
+							);
+							bindings.push(...result);
+						} catch {
+							// Host unreachable this tick — skip it, retry next interval.
+						}
+					}),
 			);
 			if (cancelled) return;
 
-			const { events, next } = diffAgentEvents(
+			// A host that dropped offline underneath an active agent is the failure
+			// we can actually observe (agent crashes never reach the lifecycle
+			// stream — a dead host just stops answering). Read the previous baseline
+			// BEFORE the diff below rebuilds it from currently-answering hosts only:
+			// the vanished keys exist exactly once, so this fires exactly once.
+			const offlineEvents: AgentNotificationEvent[] = [];
+			for (const target of currentTargets) {
+				if (target.hostOnline) continue;
+				for (const [key, kind] of prevKindsRef.current) {
+					if (!key.startsWith(`${target.workspaceId}:`)) continue;
+					if (kind !== "working" && kind !== "waiting") continue;
+					offlineEvents.push({
+						key,
+						kind: "offline",
+						workspaceId: target.workspaceId,
+						agentId: key.slice(target.workspaceId.length + 1),
+					});
+					break;
+				}
+			}
+
+			const { events: lifecycleEvents, next } = diffAgentEvents(
 				prevKindsRef.current,
 				bindings,
 				Date.now(),
 			);
 			prevKindsRef.current = next;
+
+			// App icon badge = agents waiting on Paul right now — kept in sync every
+			// poll (not only when a notification fires) so an answered permission
+			// clears the badge without a new alert.
+			const waitingCount = [...next.values()].filter(
+				(kind) => kind === "waiting",
+			).length;
+			void setAppBadgeCount(waitingCount);
+
+			const events = [...offlineEvents, ...lifecycleEvents];
 			if (events.length === 0) return;
 
 			// Granularity: `emilien` keeps only Emilien's-own-workspace events (and
@@ -255,6 +309,9 @@ export function AgentNotificationWatcher({
 			cancelled = true;
 			clearInterval(timer);
 			appStateSub.remove();
+			// Toggle off / sign-out: a stale "2 waiting" badge with the watcher gone
+			// would be a lie. An org-switch remount recomputes within one poll.
+			void setAppBadgeCount(0);
 		};
 	}, []);
 

@@ -9,8 +9,13 @@ import {
 // lifecycle mapping (incl. the "working" staleness fold) so a notification and
 // the on-screen status pill can never disagree about what an agent is doing.
 
-/** The two moments worth a notification. */
-export type AgentNotificationKind = "waiting" | "done";
+/**
+ * The moments worth a notification. `waiting` and `done` are diffed from agent
+ * lifecycle events below; `offline` is host-level (an online→offline transition
+ * while agents were active) and detected by the watcher, since a dead host stops
+ * answering the very poll this diff feeds on.
+ */
+export type AgentNotificationKind = "waiting" | "done" | "offline";
 
 export interface AgentNotificationEvent {
 	/** Stable dedup key: `${workspaceId}:${agentId}`. */
