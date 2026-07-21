@@ -43,7 +43,7 @@ interface TasksTopBarProps {
 	typeTab: TypeTab;
 	onTypeTabChange: (typeTab: TypeTab) => void;
 	projectFilter: string | null;
-	onProjectFilterChange: (projectId: string) => void;
+	onProjectFilterChange: (projectId: string | null) => void;
 }
 
 const TYPE_TABS = [
