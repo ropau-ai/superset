@@ -10,6 +10,7 @@ import { Text } from "@/components/ui/text";
 import { STATUS_COLORS } from "@/lib/theme";
 import type { LiveAgentStatus } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
 import { AgentStatusBadge } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/components/AgentStatusBadge";
+import { formatShortAge } from "../../format";
 
 /** A session is "hot" if it moved in the last two minutes → live green pulse. */
 const HOT_WINDOW_MS = 2 * 60 * 1000;
@@ -21,6 +22,17 @@ export interface FleetGroupView {
 	hostOnline: boolean | undefined;
 	/** Most-active binding's definition, for the agent-type chip. */
 	agentDefinitionId: string | null;
+	/** Host-side agent id of the most-active binding (e.g. "claude-a1b2"). */
+	agentId: string | null;
+	/** Epoch ms of the active binding's last lifecycle event — the signal age. */
+	signalAt: number | null;
+	/**
+	 * The latest agent poll for this workspace failed — whatever status/agent is
+	 * shown is the last good snapshot, and the row must say so.
+	 */
+	pollErrored: boolean;
+	/** Epoch ms of the last successful agent poll (`0` = never reached). */
+	fetchedAt: number;
 	/** Workspace-level live status, when the relay resolved one. */
 	status: LiveAgentStatus | null;
 	sessions: SelectChatSession[];
@@ -131,6 +143,31 @@ function FleetGroup({
 					/>
 				) : null}
 			</View>
+			{group.agentId || group.pollErrored ? (
+				<View className="flex-row items-center gap-2 px-1.5 pb-0.5">
+					{group.agentId ? (
+						<Text
+							className="shrink font-mono text-[11px] text-muted-foreground"
+							numberOfLines={1}
+						>
+							{group.agentId}
+						</Text>
+					) : null}
+					{group.signalAt ? (
+						<Text className="text-[11px] text-muted-foreground">
+							signal {formatShortAge(group.signalAt, now)} ago
+						</Text>
+					) : null}
+					<View className="flex-1" />
+					{group.pollErrored ? (
+						<Text className="font-medium text-[11px] text-amber-500">
+							{group.fetchedAt > 0
+								? `stale for ${formatShortAge(group.fetchedAt, now)}`
+								: "unreachable"}
+						</Text>
+					) : null}
+				</View>
+			) : null}
 			{group.sessions.map((session) => (
 				<FleetRow
 					key={session.id}
@@ -175,6 +212,9 @@ export function FleetSection({
 	onPressSession,
 }: FleetSectionProps) {
 	const sessionCount = groups.reduce((sum, g) => sum + g.sessions.length, 0);
+	// Poll failures are surfaced here, not swallowed — a fleet header that stays
+	// green while half the hosts stopped answering is the worst kind of calm.
+	const staleCount = groups.filter((g) => g.pollErrored).length;
 
 	return (
 		<View className="gap-3">
@@ -187,11 +227,18 @@ export function FleetSection({
 					/>
 					<Text className="font-semibold">Fleet</Text>
 				</View>
-				{sessionCount > 0 ? (
-					<Text className="text-muted-foreground text-xs">
-						{sessionCount} {sessionCount === 1 ? "sub-agent" : "sub-agents"}
-					</Text>
-				) : null}
+				<View className="flex-row items-center gap-2">
+					{staleCount > 0 ? (
+						<Text className="font-medium text-amber-500 text-xs">
+							{staleCount} stale
+						</Text>
+					) : null}
+					{sessionCount > 0 ? (
+						<Text className="text-muted-foreground text-xs">
+							{sessionCount} {sessionCount === 1 ? "sub-agent" : "sub-agents"}
+						</Text>
+					) : null}
+				</View>
 			</View>
 
 			{groups.length === 0 ? (

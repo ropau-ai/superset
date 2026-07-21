@@ -203,16 +203,20 @@ export function CockpitScreen() {
 		return rawFleetGroups.map((group) => {
 			const workspace = group.workspace;
 			const host = workspace ? hostsById.get(workspace.hostId) : undefined;
-			const bindings = workspace
-				? (fleetAgents.byWorkspace.get(workspace.id) ?? [])
-				: [];
-			const active = pickActiveBinding(bindings);
+			const agents = workspace
+				? fleetAgents.byWorkspace.get(workspace.id)
+				: undefined;
+			const active = pickActiveBinding(agents?.bindings ?? []);
 			return {
 				key: workspace?.id ?? NO_WORKSPACE_KEY,
 				workspaceName: workspace?.name ?? "No workspace",
 				branch: workspace?.branch ?? null,
 				hostOnline: host?.isOnline,
 				agentDefinitionId: active?.definitionId ?? null,
+				agentId: active?.agentId ?? null,
+				signalAt: active?.lastEventAt ?? null,
+				pollErrored: agents?.errored ?? false,
+				fetchedAt: agents?.fetchedAt ?? 0,
 				status: active ? statusForBinding(active, now) : null,
 				sessions: group.sessions,
 			};
