@@ -5,7 +5,7 @@ import { terminalSessions } from "../../../db/schema";
 import { mapEventType } from "../../../events";
 import { publicProcedure, router } from "../../index";
 import {
-	forgetMirroredTerminal,
+	closeMirroredTerminalSession,
 	mirrorTerminalSessionToCloud,
 } from "./mirror-terminal-session";
 
@@ -101,7 +101,10 @@ export const notificationsRouter = router({
 		// that table). Only the chat agent wrote this row before, so `claude` CLI
 		// sessions were invisible on mobile. The store is the source of truth for
 		// "is an agent live in this terminal": a binding now present means mirror
-		// it; a binding gone (Detached/exit) means release the dedupe marker.
+		// it; a binding gone (Detached/exit) means the run is over — stamp the
+		// cloud row's `endedAt` so the session stops looking live, and release the
+		// dedupe marker so a fresh agent in the same terminal re-mirrors (which
+		// clears `endedAt` again).
 		const binding = ctx.terminalAgentStore.get(input.terminalId);
 		if (binding) {
 			mirrorTerminalSessionToCloud(ctx, {
@@ -110,7 +113,7 @@ export const notificationsRouter = router({
 				agentId: binding.agentId,
 			});
 		} else {
-			forgetMirroredTerminal(input.terminalId);
+			closeMirroredTerminalSession(ctx.api, input.terminalId);
 		}
 
 		return { success: true, ignored: false as const };

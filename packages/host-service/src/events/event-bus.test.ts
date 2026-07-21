@@ -70,3 +70,60 @@ describe("EventBus port events", () => {
 		expect(sentMessages).toHaveLength(2);
 	});
 });
+
+describe("EventBus terminal lifecycle listeners", () => {
+	it("notifies in-process listeners on broadcast and stops after dispose", () => {
+		const eventBus = createEventBus();
+		const received: string[] = [];
+		const dispose = eventBus.onTerminalLifecycle((event) => {
+			received.push(event.terminalId);
+		});
+
+		const event = {
+			workspaceId: "workspace-1",
+			terminalId: "terminal-1",
+			eventType: "exit" as const,
+			exitCode: 0,
+			signal: 0,
+			occurredAt: 1_700_000_000_000,
+		};
+		eventBus.broadcastTerminalLifecycle(event);
+		expect(received).toEqual(["terminal-1"]);
+
+		dispose();
+		eventBus.broadcastTerminalLifecycle(event);
+		expect(received).toEqual(["terminal-1"]);
+	});
+
+	it("keeps broadcasting to WS clients when a listener throws", () => {
+		const eventBus = createEventBus();
+		const sentMessages: string[] = [];
+		const socket = {
+			readyState: 1,
+			send(data: string) {
+				sentMessages.push(data);
+			},
+			close() {},
+		};
+		eventBus.handleOpen(socket);
+		eventBus.onTerminalLifecycle(() => {
+			throw new Error("listener boom");
+		});
+
+		eventBus.broadcastTerminalLifecycle({
+			workspaceId: "workspace-1",
+			terminalId: "terminal-1",
+			eventType: "exit",
+			exitCode: 1,
+			signal: 0,
+			occurredAt: 1_700_000_000_000,
+		});
+
+		expect(sentMessages).toHaveLength(1);
+		expect(JSON.parse(sentMessages[0] ?? "{}")).toMatchObject({
+			type: "terminal:lifecycle",
+			terminalId: "terminal-1",
+			eventType: "exit",
+		});
+	});
+});

@@ -1,29 +1,55 @@
 import type { SelectV2Workspace } from "@superset/db/schema";
 import { useLiveQuery } from "@tanstack/react-db";
 import { compareDesc } from "date-fns";
-import { randomUUID } from "expo-crypto";
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, useWindowDimensions } from "react-native";
-import { type AgentTypeId, DEFAULT_AGENT_TYPE } from "@/lib/agentTypes";
-import { apiClient } from "@/lib/trpc/client";
+import { useSession } from "@/lib/auth/client";
+import {
+	buildHostRoutingKey,
+	type HostAgentConfigSummary,
+	HostRequestError,
+	isRelayConfigured,
+	listHostAgentConfigs,
+	runWorkspaceAgent,
+} from "@/lib/relay/relay";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
+
+/**
+ * State of the agent-runtime list for the selected workspace's host.
+ * `offline` = host unreachable (no launch possible), `error` = host online but
+ * the config read failed (retryable).
+ */
+export type NewSessionAgentsPhase = "offline" | "loading" | "ready" | "error";
 
 export interface NewSessionSheetProps {
 	isPresented: boolean;
 	onIsPresentedChange: (value: boolean) => void;
 	workspaces: SelectV2Workspace[];
+	selectedWorkspaceId: string | null;
 	onSelectWorkspace: (workspaceId: string) => void;
-	isCreating: boolean;
-	/** Selected host agent runtime — captured for future multi-agent launch. */
-	agentType: AgentTypeId;
-	onSelectAgentType: (agentType: AgentTypeId) => void;
+	/**
+	 * Agent runtimes ACTUALLY installed on the selected workspace's host — the
+	 * picker never offers an agent the host can't launch.
+	 */
+	agents: HostAgentConfigSummary[];
+	agentsPhase: NewSessionAgentsPhase;
+	onRetryAgents: () => void;
+	selectedAgentId: string | null;
+	onSelectAgent: (agentConfigId: string) => void;
+	prompt: string;
+	onChangePrompt: (value: string) => void;
+	onLaunch: () => void;
+	isLaunching: boolean;
 	width: number;
 }
 
 /**
- * Shared "new session" handler: lists cloud workspaces, resolves the 1-vs-N
- * picker, creates a session via tRPC and navigates to the Live Session.
+ * The "new session" flow: pick a workspace, pick an agent runtime installed on
+ * its host, write the initial prompt, and REALLY launch the agent — the host's
+ * `agents.run` builds the CLI command, spawns the PTY and pre-creates the
+ * mirrored cloud session, whose id we navigate to. No more empty
+ * `chat_sessions` rows pretending to be running agents.
  */
 export function useNewSession(): {
 	open: () => void;
@@ -32,16 +58,27 @@ export function useNewSession(): {
 	const router = useRouter();
 	const collections = useCollections();
 	const { width } = useWindowDimensions();
+	const { data: authData } = useSession();
+	const organizationId = authData?.session?.activeOrganizationId ?? null;
+
 	const [sheetOpen, setSheetOpen] = useState(false);
-	const [isCreating, setIsCreating] = useState(false);
-	// Selected agent runtime. Paul orchestrates through Emilien today, so this is
-	// discreet groundwork for launching Codex/Gemini/… directly. NOTE: the cloud
-	// `chat.createSession` mutation doesn't accept an agent type yet, so the
-	// selection isn't sent — wire it through once the backend takes it.
-	const [agentType, setAgentType] = useState<AgentTypeId>(DEFAULT_AGENT_TYPE);
+	const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(
+		null,
+	);
+	const [agents, setAgents] = useState<HostAgentConfigSummary[]>([]);
+	const [agentsPhase, setAgentsPhase] =
+		useState<NewSessionAgentsPhase>("loading");
+	const [agentsRetryToken, setAgentsRetryToken] = useState(0);
+	const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+	const [prompt, setPrompt] = useState("");
+	const [isLaunching, setIsLaunching] = useState(false);
 
 	const { data: workspaces } = useLiveQuery(
 		(q) => q.from({ v2Workspaces: collections.v2Workspaces }),
+		[collections],
+	);
+	const { data: hosts } = useLiveQuery(
+		(q) => q.from({ v2Hosts: collections.v2Hosts }),
 		[collections],
 	);
 
@@ -53,29 +90,109 @@ export function useNewSession(): {
 		[workspaces],
 	);
 
-	const create = useCallback(
-		async (workspaceId: string) => {
-			if (isCreating) return;
-			setIsCreating(true);
-			const sessionId = randomUUID();
+	const selectedWorkspace =
+		sortedWorkspaces.find((item) => item.id === selectedWorkspaceId) ?? null;
+	const selectedHost = selectedWorkspace
+		? ((hosts ?? []).find(
+				(item) => item.machineId === selectedWorkspace.hostId,
+			) ?? null)
+		: null;
+	const routingKey =
+		organizationId && selectedWorkspace
+			? buildHostRoutingKey(organizationId, selectedWorkspace.hostId)
+			: null;
+	const hostReady =
+		isRelayConfigured() && selectedHost?.isOnline === true && !!routingKey;
+
+	// Load the installed agent runtimes whenever the sheet targets a (reachable)
+	// host. The selection survives workspace switches when both hosts have the
+	// same agent installed; otherwise it snaps to Claude, then the host's first.
+	useEffect(() => {
+		// Referenced so bumping the token re-runs this effect (the Retry button).
+		void agentsRetryToken;
+		if (!sheetOpen) return;
+		if (!hostReady || !routingKey) {
+			setAgents([]);
+			setAgentsPhase("offline");
+			return;
+		}
+		let disposed = false;
+		setAgentsPhase("loading");
+		(async () => {
 			try {
-				await apiClient.chat.createSession.mutate({
-					sessionId,
-					v2WorkspaceId: workspaceId,
+				const configs = await listHostAgentConfigs(routingKey);
+				if (disposed) return;
+				const ordered = [...configs].sort((a, b) => a.order - b.order);
+				setAgents(ordered);
+				setAgentsPhase("ready");
+				setSelectedAgentId((current) => {
+					if (current && ordered.some((config) => config.id === current)) {
+						return current;
+					}
+					const claude = ordered.find((config) => config.presetId === "claude");
+					return (claude ?? ordered[0])?.id ?? null;
 				});
-				setSheetOpen(false);
-				router.push(`/(authenticated)/(tabs)/(sessions)/${sessionId}`);
 			} catch {
-				Alert.alert("Couldn't create session", "Please try again.");
-			} finally {
-				setIsCreating(false);
+				if (disposed) return;
+				setAgents([]);
+				setAgentsPhase("error");
 			}
-		},
-		[isCreating, router],
-	);
+		})();
+		return () => {
+			disposed = true;
+		};
+	}, [sheetOpen, hostReady, routingKey, agentsRetryToken]);
+
+	const retryAgents = useCallback(() => setAgentsRetryToken((n) => n + 1), []);
+
+	const launch = useCallback(async () => {
+		const trimmedPrompt = prompt.trim();
+		const agentConfig =
+			agents.find((config) => config.id === selectedAgentId) ?? null;
+		if (
+			isLaunching ||
+			!routingKey ||
+			!selectedWorkspace ||
+			!agentConfig ||
+			trimmedPrompt.length === 0
+		) {
+			return;
+		}
+		setIsLaunching(true);
+		try {
+			const result = await runWorkspaceAgent(routingKey, {
+				workspaceId: selectedWorkspace.id,
+				agent: agentConfig.id,
+				prompt: trimmedPrompt,
+			});
+			setSheetOpen(false);
+			setPrompt("");
+			router.push(
+				`/(authenticated)/(tabs)/(sessions)/${result.cloudSessionId}`,
+			);
+		} catch (err) {
+			const reachedHost = err instanceof HostRequestError;
+			Alert.alert(
+				"Couldn't launch agent",
+				reachedHost
+					? `The host couldn't start ${agentConfig.label}. Check the agent is installed on that machine and try again.`
+					: "Couldn't reach the workspace's host. Check your connection and try again.",
+			);
+		} finally {
+			setIsLaunching(false);
+		}
+	}, [
+		prompt,
+		agents,
+		selectedAgentId,
+		isLaunching,
+		routingKey,
+		selectedWorkspace,
+		router,
+	]);
 
 	const open = useCallback(() => {
-		if (isCreating) return;
+		if (isLaunching) return;
 		if (sortedWorkspaces.length === 0) {
 			Alert.alert(
 				"No workspaces",
@@ -83,12 +200,16 @@ export function useNewSession(): {
 			);
 			return;
 		}
-		if (sortedWorkspaces.length === 1) {
-			void create(sortedWorkspaces[0].id);
-			return;
-		}
+		// Always show the sheet — even with one workspace the launch needs an
+		// agent choice and an initial prompt.
+		setSelectedWorkspaceId(
+			(current) =>
+				(current && sortedWorkspaces.some((item) => item.id === current)
+					? current
+					: sortedWorkspaces[0]?.id) ?? null,
+		);
 		setSheetOpen(true);
-	}, [sortedWorkspaces, isCreating, create]);
+	}, [sortedWorkspaces, isLaunching]);
 
 	return {
 		open,
@@ -96,10 +217,17 @@ export function useNewSession(): {
 			isPresented: sheetOpen,
 			onIsPresentedChange: setSheetOpen,
 			workspaces: sortedWorkspaces,
-			onSelectWorkspace: create,
-			isCreating,
-			agentType,
-			onSelectAgentType: setAgentType,
+			selectedWorkspaceId,
+			onSelectWorkspace: setSelectedWorkspaceId,
+			agents,
+			agentsPhase,
+			onRetryAgents: retryAgents,
+			selectedAgentId,
+			onSelectAgent: setSelectedAgentId,
+			prompt,
+			onChangePrompt: setPrompt,
+			onLaunch: () => void launch(),
+			isLaunching,
 			width,
 		},
 	};

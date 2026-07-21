@@ -684,6 +684,15 @@ export const chatSessions = pgTable(
 			onDelete: "set null",
 		}),
 		title: text(),
+		// Recoverable session → terminal link. Set for sessions mirrored from (or
+		// launched as) a host terminal agent; null for pure chat sessions. The id
+		// refers to the host's local terminal_sessions row, which is not synced to
+		// the cloud — hence text, not a FK.
+		terminalId: text("terminal_id"),
+		// When the underlying agent/terminal ended. Null = live (or a pure chat
+		// session, which has no terminal lifecycle). Lets clients separate active
+		// sessions from history without a host round-trip.
+		endedAt: timestamp("ended_at"),
 		lastActiveAt: timestamp("last_active_at").notNull().defaultNow(),
 		createdAt: timestamp("created_at").notNull().defaultNow(),
 		updatedAt: timestamp("updated_at")

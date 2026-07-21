@@ -63,12 +63,21 @@ export interface EventBusOptions {
  * - `port:changed` events (auto-pushed for all workspace terminals)
  * - `fs:events` (on-demand per client request)
  */
+/** Payload of a `terminal:lifecycle` broadcast, minus the WS envelope `type`. */
+export type TerminalLifecycleEvent = Omit<
+	Extract<ServerMessage, { type: "terminal:lifecycle" }>,
+	"type"
+>;
+
 export class EventBus {
 	private readonly clients = new Map<WsSocket, ClientState>();
 	private readonly gitWatcher: GitWatcher;
 	private readonly filesystem: WorkspaceFilesystemManager;
 	private removeGitListener: (() => void) | null = null;
 	private removePortListeners: (() => void) | null = null;
+	private readonly terminalLifecycleListeners = new Set<
+		(event: TerminalLifecycleEvent) => void
+	>();
 
 	constructor(options: EventBusOptions) {
 		this.filesystem = options.filesystem;
@@ -169,16 +178,34 @@ export class EventBus {
 	}
 
 	/**
+	 * Subscribe in-process to terminal lifecycle events — the same stream
+	 * `broadcastTerminalLifecycle` fans out to WS clients. For host-side
+	 * services that need the PTY exit signal but live outside the terminal
+	 * module (e.g. closing the mirrored cloud session on exit). Returns a
+	 * disposer.
+	 */
+	onTerminalLifecycle(
+		listener: (event: TerminalLifecycleEvent) => void,
+	): () => void {
+		this.terminalLifecycleListeners.add(listener);
+		return () => {
+			this.terminalLifecycleListeners.delete(listener);
+		};
+	}
+
+	/**
 	 * Fan out terminal process lifecycle events to renderer clients. Agent hook
 	 * status can otherwise get stuck when a terminal exits while its pane is not
 	 * mounted and therefore cannot observe the terminal websocket `exit` packet.
 	 */
-	broadcastTerminalLifecycle(
-		message: Omit<
-			Extract<ServerMessage, { type: "terminal:lifecycle" }>,
-			"type"
-		>,
-	): void {
+	broadcastTerminalLifecycle(message: TerminalLifecycleEvent): void {
+		for (const listener of this.terminalLifecycleListeners) {
+			try {
+				listener(message);
+			} catch (error) {
+				console.error("[event-bus] terminal lifecycle listener threw", error);
+			}
+		}
 		this.broadcast({ type: "terminal:lifecycle", ...message });
 	}
 
