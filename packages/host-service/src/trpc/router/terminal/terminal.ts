@@ -110,12 +110,17 @@ export const terminalRouter = router({
 		.input(
 			z.object({
 				workspaceId: z.string(),
+				// Additive: existing callers omit this and keep the running-only
+				// view. The terminals lifecycle surface (CLI/MCP `terminals list`)
+				// passes `true` so exited-but-not-yet-disposed panes are visible
+				// and can be cleaned up.
+				includeExited: z.boolean().optional(),
 			}),
 		)
 		.query(({ input }) => ({
 			sessions: listTerminalSessions({
 				workspaceId: input.workspaceId,
-				includeExited: false,
+				includeExited: input.includeExited ?? false,
 			}),
 		})),
 

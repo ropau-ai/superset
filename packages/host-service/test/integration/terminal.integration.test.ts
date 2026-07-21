@@ -25,6 +25,7 @@ import { listTerminalResourceSessions } from "../../src/terminal/resource-sessio
 import {
 	__resetSessionsForTesting,
 	disposeSessionsByWorkspaceId,
+	listTerminalSessions,
 } from "../../src/terminal/terminal";
 import { __setAccountShellForTesting } from "../../src/terminal/user-shell.ts";
 import { type BasicScenario, createBasicScenario } from "../helpers/scenarios";
@@ -57,6 +58,82 @@ describe("terminal router integration", () => {
 			workspaceId: scenario.workspaceId,
 		});
 		expect(result.sessions).toEqual([]);
+	});
+
+	test("listSessions includeExited surfaces exited-but-not-disposed sessions", async () => {
+		const tmp = mkdtempSync(join(tmpdir(), "host-service-terminal-list-"));
+		const socketPath = join(tmp, "pty-daemon.sock");
+		const terminalId = randomUUID();
+		const server = new Server({
+			socketPath,
+			daemonVersion: "0.0.0-terminal-list-test",
+			spawnPty: ({ meta }) => createFakePty(4300, meta),
+		});
+
+		try {
+			await server.listen();
+			process.env.SUPERSET_PTY_DAEMON_SOCKET = socketPath;
+			process.env.SUPERSET_HOME_DIR = tmp;
+
+			await scenario.host.trpc.terminal.createSession.mutate({
+				workspaceId: scenario.workspaceId,
+				terminalId,
+			});
+
+			// Running: visible under both the default (running-only) view and the
+			// includeExited view, with exited=false.
+			const runningDefault =
+				await scenario.host.trpc.terminal.listSessions.query({
+					workspaceId: scenario.workspaceId,
+				});
+			expect(runningDefault.sessions.map((s) => s.terminalId)).toContain(
+				terminalId,
+			);
+			const runningExited =
+				await scenario.host.trpc.terminal.listSessions.query({
+					workspaceId: scenario.workspaceId,
+					includeExited: true,
+				});
+			expect(
+				runningExited.sessions.find((s) => s.terminalId === terminalId)?.exited,
+			).toBe(false);
+
+			// Simulate the command exiting on its own (daemon reports the PTY dead)
+			// without a host-initiated dispose — this is the frozen-pane state.
+			const daemon = await getDaemonClient();
+			await daemon.close(terminalId, "SIGHUP");
+			await waitFor(
+				() =>
+					listTerminalSessions({
+						workspaceId: scenario.workspaceId,
+						includeExited: true,
+					}).find((s) => s.terminalId === terminalId)?.exited === true,
+				3000,
+			);
+
+			// Exited session is hidden from the default view, visible under
+			// includeExited with exited=true.
+			const afterExitDefault =
+				await scenario.host.trpc.terminal.listSessions.query({
+					workspaceId: scenario.workspaceId,
+				});
+			expect(
+				afterExitDefault.sessions.find((s) => s.terminalId === terminalId),
+			).toBeUndefined();
+			const afterExitIncluded =
+				await scenario.host.trpc.terminal.listSessions.query({
+					workspaceId: scenario.workspaceId,
+					includeExited: true,
+				});
+			expect(
+				afterExitIncluded.sessions.find((s) => s.terminalId === terminalId)
+					?.exited,
+			).toBe(true);
+		} finally {
+			await disposeDaemonClient();
+			await server.close();
+			rmSync(tmp, { recursive: true, force: true });
+		}
 	});
 
 	test("killSession throws NOT_FOUND for unknown workspace", async () => {
