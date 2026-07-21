@@ -136,6 +136,59 @@ describe("terminal router integration", () => {
 		}
 	});
 
+	test("killSession disposes an exited (frozen) session", async () => {
+		const tmp = mkdtempSync(join(tmpdir(), "host-service-terminal-del-"));
+		const socketPath = join(tmp, "pty-daemon.sock");
+		const terminalId = randomUUID();
+		const server = new Server({
+			socketPath,
+			daemonVersion: "0.0.0-terminal-del-test",
+			spawnPty: ({ meta }) => createFakePty(4400, meta),
+		});
+
+		try {
+			await server.listen();
+			process.env.SUPERSET_PTY_DAEMON_SOCKET = socketPath;
+			process.env.SUPERSET_HOME_DIR = tmp;
+
+			await scenario.host.trpc.terminal.createSession.mutate({
+				workspaceId: scenario.workspaceId,
+				terminalId,
+			});
+
+			// Drive an exit → frozen pane (exited but not disposed).
+			const daemon = await getDaemonClient();
+			await daemon.close(terminalId, "SIGHUP");
+			await waitFor(
+				() =>
+					listTerminalSessions({
+						workspaceId: scenario.workspaceId,
+						includeExited: true,
+					}).find((s) => s.terminalId === terminalId)?.exited === true,
+				3000,
+			);
+
+			// Deleting the frozen session disposes it and removes it entirely.
+			const result = await scenario.host.trpc.terminal.killSession.mutate({
+				workspaceId: scenario.workspaceId,
+				terminalId,
+			});
+			expect(result.status).toBe("disposed");
+
+			const after = await scenario.host.trpc.terminal.listSessions.query({
+				workspaceId: scenario.workspaceId,
+				includeExited: true,
+			});
+			expect(
+				after.sessions.find((s) => s.terminalId === terminalId),
+			).toBeUndefined();
+		} finally {
+			await disposeDaemonClient();
+			await server.close();
+			rmSync(tmp, { recursive: true, force: true });
+		}
+	});
+
 	test("killSession throws NOT_FOUND for unknown workspace", async () => {
 		await expect(
 			scenario.host.trpc.terminal.killSession.mutate({

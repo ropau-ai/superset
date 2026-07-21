@@ -27,6 +27,7 @@ import * as tasksList from "./tasks/list";
 import * as tasksStatusesList from "./tasks/statuses/list";
 import * as tasksUpdate from "./tasks/update";
 import * as terminalsCreate from "./terminals/create";
+import * as terminalsDelete from "./terminals/delete";
 import * as terminalsList from "./terminals/list";
 import * as workspacesCreate from "./workspaces/create";
 import * as workspacesDelete from "./workspaces/delete";
@@ -60,6 +61,7 @@ const REGISTRARS = [
 	agentsList,
 	terminalsCreate,
 	terminalsList,
+	terminalsDelete,
 	projectsList,
 	hostsList,
 ];
