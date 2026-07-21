@@ -3,6 +3,7 @@ import { electronTrpc } from "renderer/lib/electron-trpc";
 import { navigateToWorkspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
 import { NOTIFICATION_EVENTS } from "shared/constants";
 import { debugLog } from "shared/debug";
+import { resolveStopPaneStatus } from "./agent-status";
 import { useTabsStore } from "./store";
 import { resolveNotificationTarget } from "./utils/resolve-notification-target";
 
@@ -88,20 +89,25 @@ export function useAgentHookListener() {
 					// pane focused (more reliable than URL parsing which can lag behind navigation)
 					const isPaneFocused =
 						tabId != null && state.focusedPaneIds[tabId] === paneId;
-					const isInActiveTab =
+					// Only auto-acknowledge (idle) when the user is *actively looking at this
+					// exact pane*: its tab is active, this pane is the focused one, AND the
+					// workspace is on screen. In every other case surface "review" so the
+					// "result ready" signal stays visible in the tab bar and pane title even
+					// when the tab is open — the cockpit needs "2 en review, 1 en permission"
+					// at a glance, not a signal that only appears once the tab is inactive.
+					const isActivelyViewingPane =
 						isTabActive &&
-						(getCurrentWorkspaceId() === workspaceId || isPaneFocused);
+						isPaneFocused &&
+						getCurrentWorkspaceId() === workspaceId;
 
 					// If stopping from a pending question state, always go idle (user already engaged)
-					const nextStatus =
-						pane?.status === "permission"
-							? "idle"
-							: isInActiveTab
-								? "idle"
-								: "review";
+					const nextStatus = resolveStopPaneStatus({
+						currentStatus: pane?.status,
+						isActivelyViewingPane,
+					});
 
 					debugLog("agent-hooks", "Stop event:", {
-						isInActiveTab,
+						isActivelyViewingPane,
 						activeTabId,
 						paneTabId: pane?.tabId,
 						paneId,
