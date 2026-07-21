@@ -1,0 +1,1 @@
+export { useCloseTerminalPaneOnExit } from "./useCloseTerminalPaneOnExit";

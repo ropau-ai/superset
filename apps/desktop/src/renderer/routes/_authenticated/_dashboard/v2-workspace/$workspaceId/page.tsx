@@ -20,6 +20,7 @@ import { WorkspaceMissingWorktreeState } from "./components/WorkspaceMissingWork
 import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
 import { useBrowserShellInteractionPassthrough } from "./hooks/useBrowserShellInteractionPassthrough";
 import { useClearActivePaneAttention } from "./hooks/useClearActivePaneAttention";
+import { useCloseTerminalPaneOnExit } from "./hooks/useCloseTerminalPaneOnExit";
 import { useConsumeAutomationRunLink } from "./hooks/useConsumeAutomationRunLink";
 import { useConsumeOpenUrlRequest } from "./hooks/useConsumeOpenUrlRequest";
 import { useDefaultContextMenuActions } from "./hooks/useDefaultContextMenuActions";
@@ -147,6 +148,9 @@ function V2WorkspaceContent() {
 		chatSessionId,
 		focusRequestId,
 	});
+	// closeOnExit terminals: drop the pane when the command exits (same path as
+	// an explicit delete). No-op for terminals created without the flag.
+	useCloseTerminalPaneOnExit({ store, workspaceId });
 	useConsumeOpenUrlRequest({
 		store,
 		url: openUrl,

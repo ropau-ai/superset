@@ -1,22 +1,20 @@
-import { boolean, CLIError, string } from "@superset/cli-framework";
+import { CLIError, string, table } from "@superset/cli-framework";
 import { command } from "../../../lib/command";
 import { resolveHostTarget } from "../../../lib/host-target";
 import { findHostWorkspace } from "../../../lib/host-workspaces";
 
 export default command({
-	description: "Create a terminal session in an existing workspace",
+	description: "List the terminal sessions of a workspace",
 	options: {
 		workspace: string().required().desc("Workspace ID"),
-		command: string().desc(
-			"Shell command to run in the terminal. Omit to open an interactive shell",
-		),
-		cwd: string().desc(
-			"Working directory for the terminal (defaults to the worktree)",
-		),
-		closeOnExit: boolean().desc(
-			"Close the terminal's pane automatically when its command exits",
-		),
 	},
+	display: (data) =>
+		table(
+			data as Record<string, unknown>[],
+			["id", "label", "status", "createdAt"],
+			["ID", "LABEL", "STATUS", "CREATED"],
+			[36, 30, 8, 24],
+		),
 	run: async ({ ctx, options }) => {
 		const organizationId = ctx.config.organizationId;
 		if (!organizationId) {
@@ -44,16 +42,18 @@ export default command({
 			userJwt: ctx.bearer,
 		});
 
-		const result = await target.client.terminal.createSession.mutate({
+		const { sessions } = await target.client.terminal.listSessions.query({
 			workspaceId: options.workspace,
-			initialCommand: options.command ?? undefined,
-			cwd: options.cwd ?? undefined,
-			closeOnExit: options.closeOnExit ?? undefined,
+			includeExited: true,
 		});
 
-		return {
-			data: result,
-			message: `Created terminal ${result.terminalId} in workspace ${options.workspace}`,
-		};
+		return sessions.map((session) => ({
+			id: session.terminalId,
+			label: session.title ?? "",
+			status: session.exited ? "exited" : "running",
+			exitCode: session.exited ? session.exitCode : null,
+			attached: session.attached,
+			createdAt: new Date(session.createdAt).toISOString(),
+		}));
 	},
 });

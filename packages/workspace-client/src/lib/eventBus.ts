@@ -43,6 +43,8 @@ export interface TerminalLifecyclePayload {
 	exitCode: number;
 	signal: number;
 	occurredAt: number;
+	/** Set when the session was created with `closeOnExit`; renderers drop the pane. */
+	closeOnExit?: boolean;
 }
 
 type PortChangedMessage = Extract<ServerMessage, { type: "port:changed" }>;
@@ -181,6 +183,7 @@ function handleMessage(state: ConnectionState, data: unknown): void {
 					exitCode: message.exitCode,
 					signal: message.signal,
 					occurredAt: message.occurredAt,
+					...(message.closeOnExit ? { closeOnExit: true } : {}),
 				},
 			);
 		} else if (message.type === "port:changed") {

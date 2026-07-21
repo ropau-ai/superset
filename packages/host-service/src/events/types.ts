@@ -42,6 +42,12 @@ export interface TerminalLifecycleMessage {
 	exitCode: number;
 	signal: number;
 	occurredAt: number;
+	/**
+	 * Set when the session was created with `closeOnExit`. Signals renderers to
+	 * remove the terminal's pane (same path as an explicit delete) rather than
+	 * leaving a frozen exited buffer.
+	 */
+	closeOnExit?: boolean;
 }
 
 export interface PortChangedMessage {

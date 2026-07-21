@@ -22,6 +22,7 @@ const createSessionInputSchema = z.object({
 	themeType: z.string().optional(),
 	cols: z.number().int().positive().optional(),
 	rows: z.number().int().positive().optional(),
+	closeOnExit: z.boolean().optional(),
 });
 
 async function createTerminalSessionFromInput({
@@ -42,6 +43,7 @@ async function createTerminalSessionFromInput({
 		cwd: input.cwd,
 		cols: input.cols,
 		rows: input.rows,
+		closeOnExit: input.closeOnExit,
 	});
 
 	if ("error" in result) {
@@ -110,12 +112,17 @@ export const terminalRouter = router({
 		.input(
 			z.object({
 				workspaceId: z.string(),
+				// Additive: existing callers omit this and keep the running-only
+				// view. The terminals lifecycle surface (CLI/MCP `terminals list`)
+				// passes `true` so exited-but-not-yet-disposed panes are visible
+				// and can be cleaned up.
+				includeExited: z.boolean().optional(),
 			}),
 		)
 		.query(({ input }) => ({
 			sessions: listTerminalSessions({
 				workspaceId: input.workspaceId,
-				includeExited: false,
+				includeExited: input.includeExited ?? false,
 			}),
 		})),
 

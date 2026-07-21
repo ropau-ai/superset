@@ -236,6 +236,8 @@ interface TerminalSession {
 	exitCode: number;
 	exitSignal: number;
 	listed: boolean;
+	/** Self-dispose + signal renderers to close the pane when the pty exits. */
+	closeOnExit: boolean;
 	title: string | null;
 	titleScanState: TerminalTitleScanState;
 	/**
@@ -871,6 +873,14 @@ interface CreateTerminalSessionOptions {
 	 * above a brand-new shell.
 	 */
 	restoredNotice?: boolean;
+	/**
+	 * When true, the session self-disposes as soon as its command exits — and
+	 * the exit lifecycle broadcast carries `closeOnExit` so renderers drop the
+	 * pane instead of leaving a frozen exited buffer. Default false preserves
+	 * the current behavior (pane persists after exit). Not persisted across a
+	 * host-service restart (in-memory only).
+	 */
+	closeOnExit?: boolean;
 }
 
 function resolveTerminalCwd(
@@ -919,6 +929,7 @@ export async function createTerminalSessionInternal({
 	adoptOnly = false,
 	replayOnAdoption = true,
 	restoredNotice = false,
+	closeOnExit = false,
 }: CreateTerminalSessionOptions): Promise<TerminalSession | { error: string }> {
 	const existing = sessions.get(terminalId);
 	if (existing) {
@@ -1110,6 +1121,7 @@ export async function createTerminalSessionInternal({
 		exitCode: 0,
 		exitSignal: 0,
 		listed,
+		closeOnExit,
 		title: null,
 		titleScanState: createTerminalTitleScanState(),
 		eventBus,
@@ -1210,7 +1222,18 @@ export async function createTerminalSessionInternal({
 					exitCode: session.exitCode,
 					signal: session.exitSignal,
 					occurredAt,
+					...(session.closeOnExit ? { closeOnExit: true } : {}),
 				});
+
+				// closeOnExit: complete the lifecycle the way an explicit delete
+				// would. The broadcast above already told renderers to drop the
+				// pane; here we self-dispose the backend session so it doesn't
+				// linger as a frozen exited row (covers the headless / no-renderer
+				// case too). Deferred to a microtask so we don't unsubscribe the
+				// very daemon subscription whose onExit we're inside.
+				if (session.closeOnExit) {
+					queueMicrotask(() => disposeSession(terminalId, db));
+				}
 			},
 		},
 	);

@@ -27,6 +27,12 @@ export function register(server: McpServer): void {
 				.describe(
 					"Working directory for the terminal (defaults to the worktree).",
 				),
+			closeOnExit: z
+				.boolean()
+				.optional()
+				.describe(
+					"When true, the terminal's pane closes automatically once its command exits (same cleanup path as terminals_delete). Defaults to false — the pane persists after exit. Useful for one-off headless commands so they don't leave a frozen pane behind.",
+				),
 		},
 		handler: async (input, ctx) => {
 			const caller = createMcpCaller(ctx);
@@ -51,6 +57,7 @@ export function register(server: McpServer): void {
 					workspaceId: input.workspaceId,
 					initialCommand: input.command,
 					cwd: input.cwd,
+					closeOnExit: input.closeOnExit,
 				},
 			);
 		},
