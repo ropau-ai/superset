@@ -189,6 +189,54 @@ describe("terminal router integration", () => {
 		}
 	});
 
+	test("closeOnExit self-disposes the session when its command exits", async () => {
+		const tmp = mkdtempSync(join(tmpdir(), "host-service-terminal-coe-"));
+		const socketPath = join(tmp, "pty-daemon.sock");
+		const terminalId = randomUUID();
+		const server = new Server({
+			socketPath,
+			daemonVersion: "0.0.0-terminal-coe-test",
+			spawnPty: ({ meta }) => createFakePty(4500, meta),
+		});
+
+		try {
+			await server.listen();
+			process.env.SUPERSET_PTY_DAEMON_SOCKET = socketPath;
+			process.env.SUPERSET_HOME_DIR = tmp;
+
+			await scenario.host.trpc.terminal.createSession.mutate({
+				workspaceId: scenario.workspaceId,
+				terminalId,
+				closeOnExit: true,
+			});
+
+			// Drive the command exit. With closeOnExit the session self-disposes
+			// instead of lingering as a frozen exited pane.
+			const daemon = await getDaemonClient();
+			await daemon.close(terminalId, "SIGHUP");
+			await waitFor(
+				() =>
+					listTerminalSessions({
+						workspaceId: scenario.workspaceId,
+						includeExited: true,
+					}).find((s) => s.terminalId === terminalId) === undefined,
+				3000,
+			);
+
+			const after = await scenario.host.trpc.terminal.listSessions.query({
+				workspaceId: scenario.workspaceId,
+				includeExited: true,
+			});
+			expect(
+				after.sessions.find((s) => s.terminalId === terminalId),
+			).toBeUndefined();
+		} finally {
+			await disposeDaemonClient();
+			await server.close();
+			rmSync(tmp, { recursive: true, force: true });
+		}
+	});
+
 	test("killSession throws NOT_FOUND for unknown workspace", async () => {
 		await expect(
 			scenario.host.trpc.terminal.killSession.mutate({

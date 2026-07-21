@@ -1,4 +1,4 @@
-import { CLIError, string } from "@superset/cli-framework";
+import { boolean, CLIError, string } from "@superset/cli-framework";
 import { command } from "../../../lib/command";
 import { resolveHostTarget } from "../../../lib/host-target";
 import { findHostWorkspace } from "../../../lib/host-workspaces";
@@ -12,6 +12,9 @@ export default command({
 		),
 		cwd: string().desc(
 			"Working directory for the terminal (defaults to the worktree)",
+		),
+		closeOnExit: boolean().desc(
+			"Close the terminal's pane automatically when its command exits",
 		),
 	},
 	run: async ({ ctx, options }) => {
@@ -45,6 +48,7 @@ export default command({
 			workspaceId: options.workspace,
 			initialCommand: options.command ?? undefined,
 			cwd: options.cwd ?? undefined,
+			closeOnExit: options.closeOnExit ?? undefined,
 		});
 
 		return {

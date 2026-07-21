@@ -22,6 +22,7 @@ const createSessionInputSchema = z.object({
 	themeType: z.string().optional(),
 	cols: z.number().int().positive().optional(),
 	rows: z.number().int().positive().optional(),
+	closeOnExit: z.boolean().optional(),
 });
 
 async function createTerminalSessionFromInput({
@@ -42,6 +43,7 @@ async function createTerminalSessionFromInput({
 		cwd: input.cwd,
 		cols: input.cols,
 		rows: input.rows,
+		closeOnExit: input.closeOnExit,
 	});
 
 	if ("error" in result) {
