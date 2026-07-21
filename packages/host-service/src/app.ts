@@ -25,6 +25,7 @@ import {
 	TerminalAgentStore,
 } from "./terminal-agents";
 import { appRouter } from "./trpc/router";
+import { closeMirroredTerminalSession } from "./trpc/router/notifications/mirror-terminal-session";
 import {
 	execGh as defaultExecGh,
 	type ExecGh,
@@ -139,6 +140,16 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 
 	const eventBus = new EventBus({ db, filesystem, gitWatcher });
 	eventBus.start();
+
+	// PTY exit is the reliable end-of-life signal for mirrored terminal-agent
+	// sessions: agent Stop/Detached hooks can be skipped (Ctrl-C, crashes), but
+	// the terminal exit always fires. Stamp the cloud row's `endedAt` so mobile
+	// stops treating the session as live.
+	eventBus.onTerminalLifecycle((event) => {
+		if (event.eventType === "exit") {
+			closeMirroredTerminalSession(api, event.terminalId);
+		}
+	});
 
 	const terminalAgentPersistence = new SqliteTerminalAgentBindingPersistence(
 		db,

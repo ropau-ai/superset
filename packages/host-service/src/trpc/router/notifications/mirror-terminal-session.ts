@@ -4,7 +4,7 @@ import {
 	isBuiltinAgentId,
 } from "@superset/shared/agent-catalog";
 import type { TerminalAgentId } from "../../../terminal-agents";
-import type { HostServiceContext } from "../../../types";
+import type { ApiClient, HostServiceContext } from "../../../types";
 
 /**
  * Fixed RFC-4122 namespace used to derive a stable `chat_sessions.id` from a
@@ -59,6 +59,34 @@ export function forgetMirroredTerminal(terminalId: string): void {
 }
 
 /**
+ * Close the mirrored cloud session for a terminal: stamp `endedAt` so clients
+ * can tell history from live sessions without a host round-trip. Runs on both
+ * agent detach and PTY exit — the latter is the reliable backstop for agents
+ * whose Stop/Detached hooks never fire (Ctrl-C, tool crash).
+ *
+ * Deliberately NOT gated on the in-memory `mirrored` set: the Detached hook
+ * clears that marker before the PTY exit arrives, and the set is empty after a
+ * host-service restart. Closing an unmirrored terminal is a cheap no-op (the
+ * deterministic id matches no cloud row). Reopening is handled by the mirror:
+ * a live-agent `createSession` clears `endedAt` again.
+ */
+export function closeMirroredTerminalSession(
+	api: ApiClient,
+	terminalId: string,
+): void {
+	forgetMirroredTerminal(terminalId);
+	const sessionId = deterministicSessionId(terminalId);
+	void api.chat.updateSession
+		.mutate({ sessionId, endedAt: new Date() })
+		.catch((error) => {
+			console.error(
+				`[mirrorTerminalSession] failed to close session for terminal ${terminalId}:`,
+				error,
+			);
+		});
+}
+
+/**
  * Mirror a live terminal/CLI agent into the synced `chat_sessions` table so it
  * surfaces in the mobile Sessions list. The chat-agent path (`runChatAgent`)
  * already writes this row; terminal agents never did, so a `claude` CLI session
@@ -89,6 +117,7 @@ export function mirrorTerminalSessionToCloud(
 			await ctx.api.chat.createSession.mutate({
 				sessionId,
 				v2WorkspaceId: input.workspaceId,
+				terminalId: input.terminalId,
 			});
 			if (title) {
 				await ctx.api.chat.updateSession.mutate({ sessionId, title });

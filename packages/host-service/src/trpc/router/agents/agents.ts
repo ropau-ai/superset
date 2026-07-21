@@ -18,6 +18,7 @@ import { createTerminalSessionInternal } from "../../../terminal/terminal";
 import type { HostServiceContext } from "../../../types";
 import { protectedProcedure, router } from "../../index";
 import { resolveAttachmentPath } from "../attachments/storage";
+import { deterministicSessionId } from "../notifications/mirror-terminal-session";
 
 interface ResolvedHostAgentConfig {
 	id: string;
@@ -162,8 +163,21 @@ export interface AgentRunInput {
 }
 
 export type AgentRunResult =
-	| { kind: "terminal"; sessionId: string; label: string }
-	| { kind: "chat"; sessionId: string; label: string };
+	| {
+			kind: "terminal";
+			/** Host-local terminal session id (the PTY). */
+			sessionId: string;
+			/** Synced `chat_sessions.id` — what mobile/desktop navigate to. */
+			cloudSessionId: string;
+			label: string;
+	  }
+	| {
+			kind: "chat";
+			/** Cloud chat session id (same value as `cloudSessionId`). */
+			sessionId: string;
+			cloudSessionId: string;
+			label: string;
+	  };
 
 const SUPERSET_AGENT_ID = "superset";
 const SUPERSET_AGENT_LABEL = "Superset";
@@ -223,11 +237,11 @@ async function runChatAgent(
 			);
 		});
 
-	return { kind: "chat", sessionId, label };
+	return { kind: "chat", sessionId, cloudSessionId: sessionId, label };
 }
 
 async function runTerminalAgent(
-	ctx: { db: HostDb; eventBus: import("../../../events").EventBus },
+	ctx: HostServiceContext,
 	input: AgentRunInput,
 ): Promise<AgentRunResult> {
 	const config = resolveHostAgentConfig(ctx.db, input.agent);
@@ -275,9 +289,33 @@ async function runTerminalAgent(
 		});
 	}
 
+	// Create the mirrored cloud session NOW (same deterministic id the
+	// notification-hook mirror derives) so the caller can navigate to it
+	// immediately instead of waiting for the agent's first lifecycle hook.
+	// Best-effort: the agent is already running, and the hook mirror retries
+	// with the same id, so a cloud hiccup here must not fail the launch.
+	const cloudSessionId = deterministicSessionId(result.terminalId);
+	try {
+		await ctx.api.chat.createSession.mutate({
+			sessionId: cloudSessionId,
+			v2WorkspaceId: input.workspaceId,
+			terminalId: result.terminalId,
+		});
+		await ctx.api.chat.updateSession.mutate({
+			sessionId: cloudSessionId,
+			title: config.label,
+		});
+	} catch (error) {
+		console.error(
+			`[agents.run] failed to pre-create cloud session for terminal ${result.terminalId}:`,
+			error,
+		);
+	}
+
 	return {
 		kind: "terminal",
 		sessionId: result.terminalId,
+		cloudSessionId,
 		label: config.label,
 	};
 }
