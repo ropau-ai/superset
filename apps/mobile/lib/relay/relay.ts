@@ -157,6 +157,59 @@ export function listWorkspaceAgents(routingKey: string, workspaceId: string) {
 	);
 }
 
+/**
+ * One terminal-agent runtime configured on a host (a row in that machine's
+ * Settings → Agents). `id` is the instance UUID `agents.run` resolves first;
+ * `presetId` is the builtin slug (claude/codex/…) and `label` the display name.
+ * Hand-typed at the boundary like every other host shape in this file.
+ */
+export interface HostAgentConfigSummary {
+	id: string;
+	presetId: string;
+	iconId: string | null;
+	label: string;
+	order: number;
+}
+
+/**
+ * List the agent runtimes actually installed on a host, so the new-session
+ * picker only ever offers launchable agents — an agent the host doesn't have
+ * simply doesn't appear. Same relay path as the terminal/agent calls above.
+ */
+export function listHostAgentConfigs(routingKey: string) {
+	return hostTrpcCall<HostAgentConfigSummary[]>(
+		routingKey,
+		"settings.agentConfigs.list",
+		undefined,
+		"GET",
+	);
+}
+
+/**
+ * Result of `agents.run` on the host. For terminal agents `sessionId` is the
+ * host-local PTY id and `cloudSessionId` the synced `chat_sessions.id` (what
+ * mobile navigates to); for the chat agent both carry the cloud session id.
+ */
+export interface AgentRunResult {
+	kind: "terminal" | "chat";
+	sessionId: string;
+	cloudSessionId: string;
+	label: string;
+}
+
+/**
+ * Actually launch an agent in a workspace on its host — the same host
+ * procedure the desktop run button and `workspaces_create --agent` use. The
+ * host builds the CLI command (prompt included), spawns the PTY, pre-creates
+ * the mirrored cloud session and returns its id for immediate navigation.
+ */
+export function runWorkspaceAgent(
+	routingKey: string,
+	args: { workspaceId: string; agent: string; prompt: string },
+) {
+	return hostTrpcCall<AgentRunResult>(routingKey, "agents.run", args, "POST");
+}
+
 // --- Rich agent activity (chat runtime messages) --------------------------
 //
 // The agent's real per-tool activity (bash commands, file diffs, commits,
