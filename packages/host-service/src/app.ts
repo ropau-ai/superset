@@ -19,6 +19,7 @@ import { runMainWorkspaceSweep } from "./runtime/main-workspace-sweep";
 import { PullRequestRuntimeManager } from "./runtime/pull-requests";
 import { runWorkspaceBackfill } from "./runtime/workspace-backfill";
 import { startWorkspaceCloudSync } from "./runtime/workspace-cloud-sync";
+import { runStartupSweep } from "./terminal/startup-sweep";
 import { registerWorkspaceTerminalRoute } from "./terminal/terminal";
 import {
 	SqliteTerminalAgentBindingPersistence,
@@ -198,6 +199,24 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 			db,
 			eventBus,
 			organizationId: config.organizationId,
+		});
+		// Reconcile daemon ↔ SQLite ↔ cloud mirror for terminals whose pty died
+		// while host-service was DOWN: their `terminal_sessions` row is still
+		// `active` and the cloud mirror never got `endedAt`, so mobile shows a
+		// falsely-live session. The reaper cannot heal this (it only walks the
+		// daemon's live sessions and short-circuits on an empty list). The sweep
+		// waits for daemon readiness, observes twice to avoid killing a terminal
+		// mid-reattach, then closes each stranded row through the SAME lifecycle
+		// exit event the pty onExit path uses — the app.ts hook above is the
+		// single choke point that stamps the cloud `endedAt`. Best-effort: it
+		// must never block startup.
+		await runStartupSweep({
+			db,
+			eventBus,
+			terminalAgentPersistence,
+			organizationId: config.organizationId,
+		}).catch((err) => {
+			console.warn("[host-service] terminal startup sweep failed:", err);
 		});
 	})();
 
