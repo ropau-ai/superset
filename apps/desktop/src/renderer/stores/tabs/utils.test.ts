@@ -10,8 +10,10 @@ import {
 	findPanePath,
 	findReusableFileViewerPane,
 	getAdjacentPaneId,
+	paneHasLiveProcess,
 	resolveActiveTabIdForWorkspace,
 	resolveFileViewerMode,
+	tabHasLiveProcess,
 } from "./utils";
 
 describe("findPanePath", () => {
@@ -809,5 +811,61 @@ describe("createChatPane", () => {
 			metadata: { model: "gpt-5" },
 			retryCount: 2,
 		});
+	});
+});
+
+describe("paneHasLiveProcess", () => {
+	const base: Pane = { id: "p1", tabId: "t1", type: "terminal", name: "sh" };
+
+	it("is false for undefined / idle / review panes", () => {
+		expect(paneHasLiveProcess(undefined)).toBe(false);
+		expect(paneHasLiveProcess({ ...base, status: "idle" })).toBe(false);
+		expect(paneHasLiveProcess({ ...base, status: "review" })).toBe(false);
+	});
+
+	it("is true when an agent is mid-run", () => {
+		expect(paneHasLiveProcess({ ...base, status: "working" })).toBe(true);
+		expect(paneHasLiveProcess({ ...base, status: "permission" })).toBe(true);
+		expect(paneHasLiveProcess({ ...base, status: "stale" })).toBe(true);
+	});
+
+	it("is true when a workspace-run command is running", () => {
+		expect(
+			paneHasLiveProcess({
+				...base,
+				status: "idle",
+				workspaceRun: { workspaceId: "w1", state: "running" },
+			}),
+		).toBe(true);
+	});
+
+	it("is false for a stopped workspace-run pane", () => {
+		expect(
+			paneHasLiveProcess({
+				...base,
+				status: "idle",
+				workspaceRun: { workspaceId: "w1", state: "stopped-by-exit" },
+			}),
+		).toBe(false);
+	});
+});
+
+describe("tabHasLiveProcess", () => {
+	const panes: Record<string, Pane> = {
+		a: { id: "a", tabId: "t1", type: "terminal", name: "a", status: "idle" },
+		b: { id: "b", tabId: "t1", type: "terminal", name: "b", status: "working" },
+		c: { id: "c", tabId: "t2", type: "terminal", name: "c", status: "idle" },
+	};
+
+	it("is true when any pane in the tab is live", () => {
+		expect(tabHasLiveProcess(panes, "t1")).toBe(true);
+	});
+
+	it("is false when every pane in the tab is idle", () => {
+		expect(tabHasLiveProcess(panes, "t2")).toBe(false);
+	});
+
+	it("is false for an unknown tab", () => {
+		expect(tabHasLiveProcess(panes, "nope")).toBe(false);
 	});
 });

@@ -16,8 +16,11 @@ import { useCollections } from "renderer/routes/_authenticated/providers/Collect
 
 interface ProjectFilterProps {
 	value: string | null;
-	onChange: (value: string) => void;
+	/** `null` = "All projects" (the whole portfolio). */
+	onChange: (value: string | null) => void;
 }
+
+const ALL_PROJECTS_LABEL = "All projects";
 
 export function ProjectFilter({ value, onChange }: ProjectFilterProps) {
 	const collections = useCollections();
@@ -42,8 +45,20 @@ export function ProjectFilter({ value, onChange }: ProjectFilterProps) {
 		return projects.filter((p) => p.name.toLowerCase().includes(q));
 	}, [projects, search]);
 
+	// Show the "All projects" entry unless the search clearly excludes it.
+	const showAllOption =
+		!search.trim() ||
+		ALL_PROJECTS_LABEL.toLowerCase().includes(search.trim().toLowerCase());
+	const nothingToShow = filtered.length === 0 && !showAllOption;
+
 	const handleSelect = (id: string) => {
 		onChange(id);
+		setOpen(false);
+		setSearch("");
+	};
+
+	const handleSelectAll = () => {
+		onChange(null);
 		setOpen(false);
 		setSearch("");
 	};
@@ -60,8 +75,8 @@ export function ProjectFilter({ value, onChange }: ProjectFilterProps) {
 				<Button
 					variant="ghost"
 					size="sm"
-					title={selected ? selected.name : "Project"}
-					aria-label={selected ? selected.name : "Project"}
+					title={selected ? selected.name : ALL_PROJECTS_LABEL}
+					aria-label={selected ? selected.name : ALL_PROJECTS_LABEL}
 					className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
 				>
 					{selected ? (
@@ -74,7 +89,7 @@ export function ProjectFilter({ value, onChange }: ProjectFilterProps) {
 						<HiOutlineFolder className="size-4" />
 					)}
 					<span className="text-sm hidden @4xl:inline">
-						{selected ? selected.name : "Project"}
+						{selected ? selected.name : ALL_PROJECTS_LABEL}
 					</span>
 					<HiChevronDown className="size-3" />
 				</Button>
@@ -87,11 +102,20 @@ export function ProjectFilter({ value, onChange }: ProjectFilterProps) {
 						onValueChange={setSearch}
 					/>
 					<CommandList className="max-h-80">
-						{filtered.length === 0 && search && (
-							<CommandEmpty>No projects found.</CommandEmpty>
-						)}
-						{filtered.length > 0 && (
+						{nothingToShow && <CommandEmpty>No projects found.</CommandEmpty>}
+						{!nothingToShow && (
 							<CommandGroup>
+								{showAllOption && (
+									<CommandItem onSelect={handleSelectAll}>
+										<HiOutlineFolder className="size-4 shrink-0" />
+										<span className="text-sm truncate">
+											{ALL_PROJECTS_LABEL}
+										</span>
+										{value === null && (
+											<HiCheck className="ml-auto size-3.5 shrink-0" />
+										)}
+									</CommandItem>
+								)}
 								{filtered.map((project) => (
 									<CommandItem
 										key={project.id}

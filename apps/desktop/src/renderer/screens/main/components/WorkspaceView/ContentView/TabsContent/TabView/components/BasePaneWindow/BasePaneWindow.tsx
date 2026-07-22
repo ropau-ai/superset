@@ -1,9 +1,11 @@
 import { cn } from "@superset/ui/utils";
-import { useContext, useRef } from "react";
+import { useContext, useRef, useState } from "react";
 import type { MosaicBranch } from "react-mosaic-component";
 import { MosaicWindow, MosaicWindowContext } from "react-mosaic-component";
 import { useDragPaneStore } from "renderer/stores/drag-pane-store";
 import { useTabsStore } from "renderer/stores/tabs/store";
+import { paneHasLiveProcess } from "renderer/stores/tabs/utils";
+import { ClosePaneConfirmDialog } from "../../../ClosePaneConfirmDialog";
 import type { SplitOrientation } from "../../hooks";
 import { useSplitOrientation } from "../../hooks";
 
@@ -58,6 +60,10 @@ export function BasePaneWindow({
 	const workspaceRunState = useTabsStore(
 		(s) => s.panes[paneId]?.workspaceRun?.state,
 	);
+	const hasLiveProcess = useTabsStore((s) =>
+		paneHasLiveProcess(s.panes[paneId]),
+	);
+	const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const splitOrientation = useSplitOrientation(containerRef);
 	const isDragging = useDragPaneStore((s) => s.draggingPaneId !== null);
@@ -71,6 +77,10 @@ export function BasePaneWindow({
 
 	const handleClosePane = (e: React.MouseEvent) => {
 		e.stopPropagation();
+		if (hasLiveProcess) {
+			setConfirmCloseOpen(true);
+			return;
+		}
 		removePane(paneId);
 	};
 
@@ -93,32 +103,45 @@ export function BasePaneWindow({
 	const isRoot = path.length === 0;
 
 	return (
-		<MosaicWindow<string>
-			path={path}
-			title=""
-			renderToolbar={() =>
-				isRoot ? (
-					<RootDraggable>{renderToolbar(handlers)}</RootDraggable>
-				) : (
-					renderToolbar(handlers)
-				)
-			}
-			className={cn(
-				isActive && "mosaic-window-focused",
-				workspaceRunState && `workspace-run-pane-${workspaceRunState}`,
-			)}
-			onDragStart={() => setDragging(paneId, tabId)}
-			onDragEnd={() => clearDragging()}
-		>
-			{/* biome-ignore lint/a11y/useKeyWithClickEvents lint/a11y/noStaticElementInteractions: Focus handler for pane */}
-			<div
-				ref={containerRef}
-				className={contentClassName}
-				style={isDragging || isResizing ? { pointerEvents: "none" } : undefined}
-				onClick={handleFocus}
+		<>
+			<MosaicWindow<string>
+				path={path}
+				title=""
+				renderToolbar={() =>
+					isRoot ? (
+						<RootDraggable>{renderToolbar(handlers)}</RootDraggable>
+					) : (
+						renderToolbar(handlers)
+					)
+				}
+				className={cn(
+					isActive && "mosaic-window-focused",
+					workspaceRunState && `workspace-run-pane-${workspaceRunState}`,
+				)}
+				onDragStart={() => setDragging(paneId, tabId)}
+				onDragEnd={() => clearDragging()}
 			>
-				{children}
-			</div>
-		</MosaicWindow>
+				{/* biome-ignore lint/a11y/useKeyWithClickEvents lint/a11y/noStaticElementInteractions: Focus handler for pane */}
+				<div
+					ref={containerRef}
+					className={contentClassName}
+					style={
+						isDragging || isResizing ? { pointerEvents: "none" } : undefined
+					}
+					onClick={handleFocus}
+				>
+					{children}
+				</div>
+			</MosaicWindow>
+			<ClosePaneConfirmDialog
+				open={confirmCloseOpen}
+				onOpenChange={setConfirmCloseOpen}
+				scope="pane"
+				onConfirm={() => {
+					setConfirmCloseOpen(false);
+					removePane(paneId);
+				}}
+			/>
+		</>
 	);
 }

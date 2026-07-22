@@ -27,6 +27,7 @@ import remarkGfm from "remark-gfm";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import { useTheme } from "renderer/stores/theme";
+import type { UIColors } from "shared/themes/types";
 import { Streamdown } from "streamdown";
 import { BasePaneWindow, PaneTitle, PaneToolbarActions } from "../components";
 import "./comment-pane.css";
@@ -197,35 +198,40 @@ export function CommentPane({
 
 const mermaidPlugins = { mermaid };
 
-const MERMAID_DARK_VARS = {
-	background: "#1e1e2e",
-	primaryColor: "#313244",
-	primaryTextColor: "#cdd6f4",
-	primaryBorderColor: "#45475a",
-	secondaryColor: "#313244",
-	secondaryTextColor: "#cdd6f4",
-	secondaryBorderColor: "#45475a",
-	tertiaryColor: "#313244",
-	tertiaryTextColor: "#cdd6f4",
-	tertiaryBorderColor: "#45475a",
-	nodeBorder: "#45475a",
-	nodeTextColor: "#cdd6f4",
-	mainBkg: "#313244",
-	clusterBkg: "#1e1e2e",
-	titleColor: "#cdd6f4",
-	edgeLabelBackground: "transparent",
-	lineColor: "#6c7086",
-	textColor: "#cdd6f4",
-};
-
-const MERMAID_LIGHT_VARS = {
-	background: "#ffffff",
-	primaryColor: "#f0f0f4",
-	primaryTextColor: "#1e1e2e",
-	primaryBorderColor: "#d0d0d8",
-	lineColor: "#888",
-	textColor: "#1e1e2e",
-};
+/**
+ * Derive Mermaid's themeVariables from the active UI theme's concrete colors,
+ * so diagrams follow the same palette as the rest of the app instead of a
+ * hardcoded Catppuccin theme that was invisible to theming. Mermaid runs color
+ * math (khroma) on these, so they must be concrete color values — never CSS
+ * `var(--token)` — which is exactly what `theme.ui` already provides.
+ */
+function buildMermaidThemeVariables(
+	ui: UIColors | undefined,
+	isDark: boolean,
+): Record<string, string | boolean> {
+	if (!ui) return { darkMode: isDark };
+	return {
+		darkMode: isDark,
+		background: ui.background,
+		primaryColor: ui.card,
+		primaryTextColor: ui.foreground,
+		primaryBorderColor: ui.border,
+		secondaryColor: ui.secondary,
+		secondaryTextColor: ui.foreground,
+		secondaryBorderColor: ui.border,
+		tertiaryColor: ui.tertiary,
+		tertiaryTextColor: ui.foreground,
+		tertiaryBorderColor: ui.border,
+		nodeBorder: ui.border,
+		nodeTextColor: ui.foreground,
+		mainBkg: ui.card,
+		clusterBkg: ui.background,
+		titleColor: ui.foreground,
+		edgeLabelBackground: "transparent",
+		lineColor: ui.mutedForeground,
+		textColor: ui.foreground,
+	};
+}
 
 function CommentCodeBlock({
 	className,
@@ -249,7 +255,7 @@ function CommentCodeBlock({
 				mermaid={{
 					config: {
 						theme: "base",
-						themeVariables: isDark ? MERMAID_DARK_VARS : MERMAID_LIGHT_VARS,
+						themeVariables: buildMermaidThemeVariables(theme?.ui, isDark),
 					},
 				}}
 			>

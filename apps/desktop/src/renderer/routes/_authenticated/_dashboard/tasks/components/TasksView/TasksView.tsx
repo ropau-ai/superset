@@ -145,7 +145,12 @@ export function TasksView({
 		[collections],
 	);
 
+	// Auto-select a project only for the PRs/Issues tabs, which query a specific
+	// repo and cannot show a portfolio-wide list. The Tasks tab defaults to
+	// "All projects" (projectFilter === null) so Paul can triage the whole
+	// portfolio — the tasks list itself is not project-scoped.
 	useEffect(() => {
+		if (typeTab === "tasks") return;
 		if (!v2Projects) return;
 		if (projectFilter && v2Projects.some((p) => p.id === projectFilter)) return;
 		const firstProject = v2Projects[0];
@@ -155,7 +160,7 @@ export function TasksView({
 			search: buildSearch({ project: firstProject.id }),
 			replace: true,
 		});
-	}, [projectFilter, v2Projects, navigate, buildSearch]);
+	}, [typeTab, projectFilter, v2Projects, navigate, buildSearch]);
 
 	const isLinearConnected =
 		integrations?.some((i) => i.provider === "linear") ?? false;
@@ -176,7 +181,7 @@ export function TasksView({
 		navigate({ to: "/tasks", search: buildSearch({ type }), replace: true });
 	};
 
-	const handleProjectFilterChange = (project: string) => {
+	const handleProjectFilterChange = (project: string | null) => {
 		navigate({ to: "/tasks", search: buildSearch({ project }), replace: true });
 	};
 

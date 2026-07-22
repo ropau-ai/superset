@@ -3,6 +3,8 @@ import type { ISearchOptions, SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HiChevronDown, HiChevronUp, HiMiniXMark } from "react-icons/hi2";
 import { PiTextAa } from "react-icons/pi";
+import { useTheme } from "renderer/stores/theme";
+import type { UIColors } from "shared/themes/types";
 
 interface TerminalSearchProps {
 	searchAddon: SearchAddon | null;
@@ -10,7 +12,8 @@ interface TerminalSearchProps {
 	onClose: () => void;
 }
 
-const SEARCH_DECORATIONS: ISearchOptions["decorations"] = {
+/** Fallback find colors when no theme is resolved (VS Code palette). */
+const DEFAULT_SEARCH_DECORATIONS: ISearchOptions["decorations"] = {
 	matchBackground: "#515c6a",
 	matchBorder: "#74879f",
 	matchOverviewRuler: "#d186167e",
@@ -18,6 +21,31 @@ const SEARCH_DECORATIONS: ISearchOptions["decorations"] = {
 	activeMatchBorder: "#ffd33d",
 	activeMatchColorOverviewRuler: "#ffd33d",
 };
+
+/** Append an alpha byte to a `#rrggbb` hex; leave other color formats intact. */
+function withAlpha(color: string, alpha: string): string {
+	return /^#[0-9a-fA-F]{6}$/.test(color) ? `${color}${alpha}` : color;
+}
+
+/**
+ * Derive xterm find-decoration colors from the active theme's concrete colors so
+ * search highlights follow the current theme. These are painted on the xterm
+ * canvas (overview ruler) and cannot be CSS `var(--token)`, so we source the
+ * theme's resolved hex values and add alpha where a translucent wash is wanted.
+ */
+function buildSearchDecorations(
+	ui: UIColors | undefined,
+): ISearchOptions["decorations"] {
+	if (!ui) return DEFAULT_SEARCH_DECORATIONS;
+	return {
+		matchBackground: withAlpha(ui.accent, "66"),
+		matchBorder: ui.accent,
+		matchOverviewRuler: withAlpha(ui.accent, "7e"),
+		activeMatchBackground: withAlpha(ui.accent, "99"),
+		activeMatchBorder: ui.primary,
+		activeMatchColorOverviewRuler: ui.primary,
+	};
+}
 
 export function TerminalSearch({
 	searchAddon,
@@ -28,14 +56,20 @@ export function TerminalSearch({
 	const [query, setQuery] = useState("");
 	const [matchCount, setMatchCount] = useState<number | null>(null);
 	const [caseSensitive, setCaseSensitive] = useState(false);
+	const theme = useTheme();
+
+	const decorations = useMemo(
+		() => buildSearchDecorations(theme?.ui),
+		[theme?.ui],
+	);
 
 	const searchOptions: ISearchOptions = useMemo(
 		() => ({
 			caseSensitive,
 			regex: false,
-			decorations: SEARCH_DECORATIONS,
+			decorations,
 		}),
-		[caseSensitive],
+		[caseSensitive, decorations],
 	);
 
 	// Focus input when search opens
