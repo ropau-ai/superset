@@ -59,7 +59,7 @@ export function useTerminalStream({
 		useState<TerminalStreamState | null>(null);
 	const [terminalTitle, setTerminalTitle] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [_retryToken, setRetryToken] = useState(0);
+	const [retryToken, setRetryToken] = useState(0);
 
 	const linesRef = useRef<string[]>([]);
 	const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,6 +71,10 @@ export function useTerminalStream({
 	const retry = useCallback(() => setRetryToken((n) => n + 1), []);
 
 	useEffect(() => {
+		// `retry()` bumps `retryToken` for the sole purpose of re-running this
+		// effect (fresh discovery + reconnect). Reading it here is what makes the
+		// deps entry below load-bearing — without it the Retry button is a no-op.
+		void retryToken;
 		if (!enabled || !routingKey || !workspaceId) {
 			setPhase("disabled");
 			return;
@@ -169,7 +173,7 @@ export function useTerminalStream({
 				flushTimer.current = null;
 			}
 		};
-	}, [routingKey, workspaceId, terminalId, enabled]);
+	}, [routingKey, workspaceId, terminalId, enabled, retryToken]);
 
 	return { lines, phase, connectionState, terminalTitle, error, retry };
 }
