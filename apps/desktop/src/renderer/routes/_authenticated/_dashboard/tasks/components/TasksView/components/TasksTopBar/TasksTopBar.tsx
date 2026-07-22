@@ -196,6 +196,8 @@ export function TasksTopBar({
 								<button
 									type="button"
 									title="Table view"
+									aria-label="Table view"
+									aria-pressed={viewMode === "table"}
 									className={cn(
 										"flex items-center justify-center size-6 rounded-sm transition-colors",
 										viewMode === "table"
@@ -209,6 +211,8 @@ export function TasksTopBar({
 								<button
 									type="button"
 									title="Board view"
+									aria-label="Board view"
+									aria-pressed={viewMode === "board"}
 									className={cn(
 										"flex items-center justify-center size-6 rounded-sm transition-colors",
 										viewMode === "board"
