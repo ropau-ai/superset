@@ -55,7 +55,10 @@ export interface AttentionItem {
 	pollErrored: boolean;
 	/** Epoch ms of the last successful agent poll (`0` = never reached). */
 	fetchedAt: number;
-	/** Tap target — the workspace's most recently active session. */
+	/**
+	 * Tap target — a live agent row's OWN session (joined by `terminalId`),
+	 * falling back to the workspace's most recently active session.
+	 */
 	session: SelectChatSession;
 	/** Sessions behind this row (history lives on the workspace screens). */
 	sessionCount: number;
@@ -146,13 +149,24 @@ export function buildAttentionItems(
 			if (active.length > 0) {
 				for (const binding of active) {
 					const kind = statusForBinding(binding, now).kind;
+					// Join the row to its OWN session via the terminal truth link, so
+					// tapping a live agent opens that agent's session — never a
+					// sibling's from the same workspace. Legacy sessions (null
+					// `terminalId`, mirrored before the link existed) can't match a
+					// binding, so they keep the representative fallback.
+					const bound =
+						group.sessions.find(
+							(session) => session.terminalId === binding.terminalId,
+						) ?? rep;
 					items.push({
 						...base,
 						key: `agent:${workspace.id}:${binding.agentId}`,
 						rank: kind === "waiting" ? "waiting" : "working",
+						title: bound.title?.trim() || title,
 						agentDefinitionId: binding.definitionId ?? null,
 						agentId: binding.agentId,
 						since: binding.lastEventAt,
+						session: bound,
 					});
 				}
 				continue;

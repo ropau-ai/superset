@@ -147,6 +147,10 @@ export function CockpitScreen() {
 		const groups = new Map<string, AttentionSourceGroup>();
 		for (const session of sessions ?? []) {
 			if (emilienSessionId && session.id === emilienSessionId) continue;
+			// `endedAt` is authoritative (the host stamped the terminal's exit):
+			// ended sessions are history, not current Fleet. They stay reachable on
+			// the sessions/workspace screens; the attention inbox only reads live.
+			if (session.endedAt != null) continue;
 			const workspace = session.v2WorkspaceId
 				? (workspacesById.get(session.v2WorkspaceId) ?? null)
 				: null;
