@@ -565,6 +565,7 @@
         "@types/node": "24.12.0",
         "@types/react": "19.2.14",
         "babel-preset-expo": "56.0.11",
+        "bun-types": "1.3.11",
         "expo-mcp": "0.2.4",
         "storybook": "10.4.2",
         "typescript": "6.0.3",
