@@ -26,12 +26,7 @@ export type PaneType =
  *   safety net for the hook leaks (Ctrl+C, denied permission, tool fail) that
  *   never emit a Stop. Dismissable by acknowledgement; self-heals on new output.
  */
-export type PaneStatus =
-	| "idle"
-	| "working"
-	| "permission"
-	| "review"
-	| "stale";
+export type PaneStatus = "idle" | "working" | "permission" | "review" | "stale";
 
 /** Non-idle status for UI indicators */
 export type ActivePaneStatus = Exclude<PaneStatus, "idle">;

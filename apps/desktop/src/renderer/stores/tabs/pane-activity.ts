@@ -16,7 +16,10 @@ export const STALE_WORKING_THRESHOLD_MS = 5 * 60_000;
 const lastActivityAt = new Map<string, number>();
 
 /** Record that a pane produced activity (PTY output, or entering "working"). */
-export function recordPaneActivity(paneId: string, now: number = Date.now()): void {
+export function recordPaneActivity(
+	paneId: string,
+	now: number = Date.now(),
+): void {
 	lastActivityAt.set(paneId, now);
 }
 
