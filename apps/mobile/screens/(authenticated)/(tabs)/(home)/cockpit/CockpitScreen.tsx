@@ -1,4 +1,4 @@
-import type { SelectChatSession, SelectV2Workspace } from "@superset/db/schema";
+import type { SelectChatSession } from "@superset/db/schema";
 import { useLiveQuery } from "@tanstack/react-db";
 import { compareDesc } from "date-fns";
 import { useRouter } from "expo-router";
@@ -15,16 +15,15 @@ import { buildHostRoutingKey, isRelayConfigured } from "@/lib/relay/relay";
 import {
 	deriveAgentStatus,
 	type LiveAgentStatus,
-	pickActiveBinding,
-	statusForBinding,
 } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/agentStatus";
 import { useAgentActivity } from "@/screens/(authenticated)/(tabs)/(sessions)/[id]/hooks/useAgentActivity";
 import { useOrganizations } from "@/screens/(authenticated)/hooks/useOrganizations";
 import { useCollections } from "@/screens/(authenticated)/providers/CollectionsProvider";
 import { OrganizationSwitcherSheet } from "../workspaces/components/OrganizationSwitcherSheet";
 import { OrganizationAvatar } from "../workspaces/components/OrganizationSwitcherSheet/components/OrganizationAvatar";
+import { type AttentionSourceGroup, buildAttentionItems } from "./attention";
+import { AttentionInbox } from "./components/AttentionInbox";
 import { EmilienCard } from "./components/EmilienCard";
-import { type FleetGroupView, FleetSection } from "./components/FleetSection";
 import { useEmilienSession } from "./hooks/useEmilienSession";
 import { type FleetWorkspaceRef, useFleetAgents } from "./hooks/useFleetAgents";
 
@@ -44,16 +43,12 @@ function lastActiveAt(session: SelectChatSession): Date {
 	return session.lastActiveAt ?? session.updatedAt ?? session.createdAt;
 }
 
-interface RawFleetGroup {
-	workspace: SelectV2Workspace | null;
-	sessions: SelectChatSession[];
-}
-
 /**
  * The cockpit Home — Emilien-centric. A pinned Emilien hero (live status, tap →
- * chat) sits above the fleet of every other session, grouped by workspace with
- * live agent-type + status pulled from the relay. The old workspace list lives
- * on as a sub-screen reachable from the header.
+ * chat) sits above the attention inbox: every other agent/workspace as one row,
+ * sorted by cost of inaction (waiting > review > offline > working > idle) with
+ * live status pulled from the relay. The old workspace list lives on as a
+ * sub-screen reachable from the header.
  */
 export function CockpitScreen() {
 	const router = useRouter();
@@ -147,11 +142,15 @@ export function CockpitScreen() {
 	});
 
 	// --- Fleet: every non-Emilien session, grouped by workspace -------------
-	const rawFleetGroups = useMemo<RawFleetGroup[]>(() => {
+	const rawFleetGroups = useMemo<AttentionSourceGroup[]>(() => {
 		const emilienSessionId = emilien.session?.id ?? null;
-		const groups = new Map<string, RawFleetGroup>();
+		const groups = new Map<string, AttentionSourceGroup>();
 		for (const session of sessions ?? []) {
 			if (emilienSessionId && session.id === emilienSessionId) continue;
+			// `endedAt` is authoritative (the host stamped the terminal's exit):
+			// ended sessions are history, not current Fleet. They stay reachable on
+			// the sessions/workspace screens; the attention inbox only reads live.
+			if (session.endedAt != null) continue;
 			const workspace = session.v2WorkspaceId
 				? (workspacesById.get(session.v2WorkspaceId) ?? null)
 				: null;
@@ -178,7 +177,7 @@ export function CockpitScreen() {
 		});
 	}, [sessions, workspacesById, emilien.session?.id]);
 
-	// Online fleet workspaces we poll for live agent-type + status (bounded).
+	// Online fleet workspaces we poll for live agent-type + status (full coverage).
 	const fleetWorkspaceRefs = useMemo<FleetWorkspaceRef[]>(() => {
 		if (!organizationId) return [];
 		const refs: FleetWorkspaceRef[] = [];
@@ -199,25 +198,16 @@ export function CockpitScreen() {
 		enabled: relayConfigured && fleetWorkspaceRefs.length > 0,
 	});
 
-	const fleetGroups = useMemo<FleetGroupView[]>(() => {
-		return rawFleetGroups.map((group) => {
-			const workspace = group.workspace;
-			const host = workspace ? hostsById.get(workspace.hostId) : undefined;
-			const bindings = workspace
-				? (fleetAgents.byWorkspace.get(workspace.id) ?? [])
-				: [];
-			const active = pickActiveBinding(bindings);
-			return {
-				key: workspace?.id ?? NO_WORKSPACE_KEY,
-				workspaceName: workspace?.name ?? "No workspace",
-				branch: workspace?.branch ?? null,
-				hostOnline: host?.isOnline,
-				agentDefinitionId: active?.definitionId ?? null,
-				status: active ? statusForBinding(active, now) : null,
-				sessions: group.sessions,
-			};
-		});
-	}, [rawFleetGroups, hostsById, fleetAgents.byWorkspace, now]);
+	const attentionItems = useMemo(
+		() =>
+			buildAttentionItems(
+				rawFleetGroups,
+				hostsById,
+				fleetAgents.byWorkspace,
+				now,
+			),
+		[rawFleetGroups, hostsById, fleetAgents.byWorkspace, now],
+	);
 
 	const projectLabel = emilien.project
 		? `${emilien.project.name} / ${emilien.workspace?.branch ?? "main"}`
@@ -295,12 +285,12 @@ export function CockpitScreen() {
 					tokens={emilienTokens}
 				/>
 
-				<FleetSection
-					groups={fleetGroups}
+				<AttentionInbox
+					items={attentionItems}
 					loading={!sessionsReady}
 					now={now}
-					onPressSession={(session) =>
-						router.push(`/(authenticated)/(tabs)/(sessions)/${session.id}`)
+					onPressItem={(item) =>
+						router.push(`/(authenticated)/(tabs)/(sessions)/${item.session.id}`)
 					}
 				/>
 			</ScrollView>

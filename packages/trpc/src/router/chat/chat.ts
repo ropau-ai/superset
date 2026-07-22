@@ -27,6 +27,7 @@ export const chatRouter = {
 			z.object({
 				sessionId: z.uuid(),
 				v2WorkspaceId: z.uuid(),
+				terminalId: z.string().min(1).optional(),
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
@@ -40,16 +41,24 @@ export const chatRouter = {
 			}
 
 			const result = await dbWs.transaction(async (tx) => {
-				const [inserted] = await tx
-					.insert(chatSessions)
-					.values({
-						id: input.sessionId,
-						organizationId,
-						createdBy: ctx.session.user.id,
-						v2WorkspaceId: input.v2WorkspaceId,
-					})
-					.onConflictDoNothing()
-					.returning({ id: chatSessions.id });
+				const insert = tx.insert(chatSessions).values({
+					id: input.sessionId,
+					organizationId,
+					createdBy: ctx.session.user.id,
+					v2WorkspaceId: input.v2WorkspaceId,
+					...(input.terminalId ? { terminalId: input.terminalId } : {}),
+				});
+				// A terminal-linked create is the host mirroring a LIVE agent: on
+				// re-mirror of an existing row, backfill the terminal link and clear
+				// `endedAt` — a new agent run in the same terminal reopens the same
+				// deterministic session instead of staying a ghost of the last exit.
+				const [inserted] = await (input.terminalId
+					? insert.onConflictDoUpdate({
+							target: chatSessions.id,
+							set: { terminalId: input.terminalId, endedAt: null },
+						})
+					: insert.onConflictDoNothing()
+				).returning({ id: chatSessions.id });
 
 				if (!inserted) {
 					return { txid: null };
@@ -71,6 +80,8 @@ export const chatRouter = {
 				sessionId: z.uuid(),
 				title: z.string().optional(),
 				lastActiveAt: z.date().optional(),
+				// Null clears the marker (agent reappeared in the same terminal).
+				endedAt: z.date().nullable().optional(),
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
@@ -89,6 +100,9 @@ export const chatRouter = {
 			}
 			if (input.lastActiveAt !== undefined) {
 				updates.lastActiveAt = input.lastActiveAt;
+			}
+			if (input.endedAt !== undefined) {
+				updates.endedAt = input.endedAt;
 			}
 
 			if (Object.keys(updates).length === 0) {

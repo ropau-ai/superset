@@ -209,6 +209,7 @@ describe("notificationsRouter.hook", () => {
 		expect(createSession.mock.calls[0]?.[0]).toEqual({
 			sessionId: deterministicSessionId(terminalId),
 			v2WorkspaceId: "workspace-9",
+			terminalId,
 		});
 
 		await flush();
@@ -259,6 +260,30 @@ describe("notificationsRouter.hook", () => {
 		await flush();
 
 		expect(createSession).not.toHaveBeenCalled();
+	});
+
+	it("closes the mirrored session when the agent binding disappears", async () => {
+		const terminalId = "term-mirror-e";
+		forgetMirroredTerminal(terminalId);
+		const { ctx, updateSession } = createContext("workspace-9");
+		const caller = notificationsRouter.createCaller(ctx);
+
+		await caller.hook({
+			terminalId,
+			eventType: "SessionStart",
+			agent: { agentId: "claude" },
+		});
+		await flush();
+		const callsAfterMirror = updateSession.mock.calls.length;
+
+		await caller.hook({ terminalId, eventType: "SessionEnd" }); // Detached → binding gone
+		await flush();
+
+		const closeCall = updateSession.mock.calls[callsAfterMirror]?.[0] as
+			| { sessionId: string; endedAt?: Date }
+			| undefined;
+		expect(closeCall?.sessionId).toBe(deterministicSessionId(terminalId));
+		expect(closeCall?.endedAt).toBeInstanceOf(Date);
 	});
 
 	it("re-mirrors after the terminal detaches and a new agent attaches", async () => {

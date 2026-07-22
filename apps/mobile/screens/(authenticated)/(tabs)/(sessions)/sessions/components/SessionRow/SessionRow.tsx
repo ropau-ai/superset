@@ -14,6 +14,9 @@ export function SessionRow({
 }) {
 	const activeAt =
 		session.lastActiveAt ?? session.updatedAt ?? session.createdAt;
+	// `endedAt` is authoritative (the host stamped the terminal's exit) — say so
+	// instead of presenting finished history as a live session.
+	const ended = session.endedAt != null;
 
 	return (
 		<Pressable
@@ -32,7 +35,9 @@ export function SessionRow({
 					{session.title ?? "Untitled session"}
 				</Text>
 				<Text className="text-muted-foreground text-xs" numberOfLines={1}>
-					{formatDistanceToNow(activeAt, { addSuffix: true })}
+					{ended
+						? `Ended ${formatDistanceToNow(session.endedAt ?? activeAt, { addSuffix: true })}`
+						: formatDistanceToNow(activeAt, { addSuffix: true })}
 				</Text>
 			</View>
 		</Pressable>

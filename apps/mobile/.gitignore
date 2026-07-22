@@ -32,6 +32,8 @@ yarn-error.*
 
 # local env files
 .env*.local
+# the template must stay committable (the root .gitignore ignores `.env.*`)
+!.env.example
 
 # typescript
 *.tsbuildinfo

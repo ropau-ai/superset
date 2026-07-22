@@ -24,6 +24,12 @@ const STATUS_CONFIG = {
 		pulse: false,
 		tooltip: "Ready for review",
 	},
+	stale: {
+		pingColor: "",
+		dotColor: "bg-muted-foreground",
+		pulse: false,
+		tooltip: "Stale? No activity in a while — click to dismiss",
+	},
 } as const satisfies Record<
 	ActivePaneStatus,
 	{ pingColor: string; dotColor: string; pulse: boolean; tooltip: string }
@@ -39,6 +45,7 @@ interface StatusIndicatorProps {
  * - Red pulsing: needs user input (permission)
  * - Amber pulsing: agent working
  * - Green static: ready for review
+ * - Muted static: stale (working with no activity for a while)
  */
 export function StatusIndicator({ status, className }: StatusIndicatorProps) {
 	const config = STATUS_CONFIG[status];

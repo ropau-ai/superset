@@ -16,13 +16,17 @@ import {
 // and delivered via APNs/FCM even when the app is fully backgrounded or killed.
 //
 // TODO(APNs remote — needs an Apple Developer account + EAS push credentials):
-//   1. Configure push credentials (`eas credentials`) so `getExpoPushTokenAsync`
-//      / `getDevicePushTokenAsync` return a usable token on iOS.
+//   1. Enroll the Apple Developer Program (paid, ~99 USD/yr) with the account
+//      that owns bundle id `sh.superset.mobile`, then run `eas credentials` to
+//      generate/upload the APNs key so `getExpoPushTokenAsync` /
+//      `getDevicePushTokenAsync` return a usable token on iOS.
 //   2. POST the returned token to the backend, associated with this device/user
 //      (a `device.registerPushToken` mutation, alongside `device.registerDevice`).
-//   3. Emit the "waiting for you" / "done" pushes from the host-service instead
-//      of the on-device poll in `AgentNotificationWatcher`, reusing the same
-//      `data.sessionId` deep-link payload this module already speaks.
+//   3. Emit the "waiting for you" / "done" / "offline" pushes from the
+//      host-service instead of the on-device poll in `AgentNotificationWatcher`,
+//      reusing the same `data.sessionId` deep-link payload this module already
+//      speaks — that's what upgrades delivery from foreground-only to
+//      background/killed-app.
 // Until then this is intentionally never called — nothing depends on it, so an
 // absent account or credential can't break the app.
 // ─────────────────────────────────────────────────────────────────────────────

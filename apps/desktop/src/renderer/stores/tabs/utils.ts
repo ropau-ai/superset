@@ -994,3 +994,34 @@ export const activatePaneInWorkspace = ({
 		},
 	};
 };
+
+/**
+ * Whether a pane has a live process worth confirming before closing.
+ *
+ * True when an agent is mid-run (working / awaiting permission / stale) or a
+ * workspace-run command is active. Idle and review panes have nothing running
+ * to lose, so they close without a prompt. This is a renderer-side heuristic:
+ * it does not detect a bare foreground command a user launched by hand, only
+ * the states the app already tracks.
+ */
+export function paneHasLiveProcess(
+	pane: Pick<Pane, "status" | "workspaceRun"> | undefined,
+): boolean {
+	if (!pane) return false;
+	if (pane.workspaceRun?.state === "running") return true;
+	return (
+		pane.status === "working" ||
+		pane.status === "permission" ||
+		pane.status === "stale"
+	);
+}
+
+/** True if any pane in the tab has a live process (see paneHasLiveProcess). */
+export function tabHasLiveProcess(
+	panes: Record<string, Pane>,
+	tabId: string,
+): boolean {
+	return Object.values(panes).some(
+		(pane) => pane.tabId === tabId && paneHasLiveProcess(pane),
+	);
+}

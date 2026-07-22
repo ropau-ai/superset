@@ -414,6 +414,13 @@
       "when": 1781022905246,
       "tag": "0058_backfill_slack_opus_4_8",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1784677347772,
+      "tag": "0059_chat_sessions_terminal_link",
+      "breakpoints": true
     }
   ]
 }

@@ -4,10 +4,16 @@ import {
 	environment,
 	presentationDragIndicator,
 } from "@expo/ui/swift-ui/modifiers";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import { Check } from "lucide-react-native";
+import {
+	ActivityIndicator,
+	Pressable,
+	ScrollView,
+	TextInput,
+	View,
+} from "react-native";
 import { Text } from "@/components/ui/text";
 import { useTheme } from "@/hooks/useTheme";
-import { AGENT_TYPE_PRESETS } from "@/lib/agentTypes";
 import { EMBER, withAlpha } from "@/lib/theme";
 import type { NewSessionSheetProps } from "@/screens/(authenticated)/hooks/useNewSession";
 
@@ -17,13 +23,29 @@ export function NewSessionSheet({
 	isPresented,
 	onIsPresentedChange,
 	workspaces,
+	selectedWorkspaceId,
 	onSelectWorkspace,
-	isCreating,
-	agentType,
-	onSelectAgentType,
+	agents,
+	agentsPhase,
+	onRetryAgents,
+	selectedAgentId,
+	onSelectAgent,
+	prompt,
+	onChangePrompt,
+	onLaunch,
+	isLaunching,
 	width,
 }: NewSessionSheetProps) {
 	const theme = useTheme();
+
+	const selectedAgent =
+		agents.find((config) => config.id === selectedAgentId) ?? null;
+	const canLaunch =
+		!isLaunching &&
+		agentsPhase === "ready" &&
+		!!selectedAgent &&
+		!!selectedWorkspaceId &&
+		prompt.trim().length > 0;
 
 	return (
 		<Host style={{ position: "absolute", width }}>
@@ -40,91 +62,206 @@ export function NewSessionSheet({
 					]}
 				>
 					<RNHostView matchContents>
-						<View className="px-5 pb-3 pt-6">
-							<View className="mb-2 flex-row items-center gap-2">
-								<Text
-									className="text-sm font-semibold"
-									style={{ color: theme.mutedForeground }}
-								>
-									New session
-								</Text>
-								{isCreating ? (
-									<ActivityIndicator
-										size="small"
-										color={theme.mutedForeground}
-									/>
-								) : null}
-							</View>
+						<View className="px-5 pb-4 pt-6">
+							<Text
+								className="mb-3 text-sm font-semibold"
+								style={{ color: theme.mutedForeground }}
+							>
+								New session
+							</Text>
 
-							{/* Agent runtime picker — discreet groundwork for launching
-							    Codex/Gemini/… directly (not yet sent to the backend). */}
 							<Text
 								className="mb-1.5 text-xs font-medium uppercase tracking-wide"
 								style={{ color: theme.mutedForeground }}
 							>
-								Agent
+								Workspace
 							</Text>
 							<ScrollView
-								horizontal
-								showsHorizontalScrollIndicator={false}
-								contentContainerStyle={{ gap: 8, paddingBottom: 12 }}
+								style={{ maxHeight: 176 }}
+								contentContainerStyle={{ paddingBottom: 8 }}
 							>
-								{AGENT_TYPE_PRESETS.map((preset) => {
-									const active = preset.id === agentType;
+								{workspaces.map((workspace) => {
+									const active = workspace.id === selectedWorkspaceId;
 									return (
 										<Pressable
-											key={preset.id}
-											onPress={() => onSelectAgentType(preset.id)}
-											hitSlop={10}
-											className="rounded-full border px-3.5 py-2.5"
-											style={{
-												borderColor: active ? EMBER : theme.border,
-												backgroundColor: active ? EMBER_TINT : "transparent",
-											}}
+											key={workspace.id}
+											onPress={() => onSelectWorkspace(workspace.id)}
+											disabled={isLaunching}
+											hitSlop={6}
+											accessibilityRole="button"
+											accessibilityState={{ selected: active }}
+											className="flex-row items-center gap-2.5 py-2.5"
+											style={{ opacity: isLaunching ? 0.5 : 1 }}
 										>
-											<Text
-												className="text-sm font-medium"
-												style={{ color: active ? EMBER : theme.foreground }}
-											>
-												{preset.label}
-											</Text>
+											<View className="flex-1">
+												<Text
+													className="text-sm font-medium"
+													style={{
+														color: active ? EMBER : theme.foreground,
+													}}
+													numberOfLines={1}
+												>
+													{workspace.name}
+												</Text>
+												<Text
+													className="font-mono text-xs"
+													style={{ color: theme.mutedForeground }}
+													numberOfLines={1}
+												>
+													{workspace.branch}
+												</Text>
+											</View>
+											{active ? (
+												<Check color={EMBER} size={16} strokeWidth={2.5} />
+											) : null}
 										</Pressable>
 									);
 								})}
 							</ScrollView>
 
-							<ScrollView
-								style={{ maxHeight: 280 }}
-								contentContainerStyle={{ paddingBottom: 8 }}
+							{/* Only agents ACTUALLY installed on the selected host — an
+							    unlaunchable runtime never appears, so the UI can't lie. */}
+							<Text
+								className="mb-1.5 mt-1 text-xs font-medium uppercase tracking-wide"
+								style={{ color: theme.mutedForeground }}
 							>
-								{workspaces.map((workspace) => (
-									<Pressable
-										key={workspace.id}
-										onPress={() => onSelectWorkspace(workspace.id)}
-										disabled={isCreating}
-										hitSlop={6}
-										className="flex-row items-center gap-2.5 py-3"
-										style={{ opacity: isCreating ? 0.5 : 1 }}
-									>
-										<View className="flex-1">
-											<Text
-												className="text-sm font-medium"
-												style={{ color: theme.foreground }}
-												numberOfLines={1}
+								Agent
+							</Text>
+							{agentsPhase === "ready" ? (
+								<ScrollView
+									horizontal
+									showsHorizontalScrollIndicator={false}
+									contentContainerStyle={{ gap: 8, paddingBottom: 12 }}
+								>
+									{agents.map((config) => {
+										const active = config.id === selectedAgentId;
+										return (
+											<Pressable
+												key={config.id}
+												onPress={() => onSelectAgent(config.id)}
+												disabled={isLaunching}
+												hitSlop={10}
+												accessibilityRole="button"
+												accessibilityState={{ selected: active }}
+												className="rounded-full border px-3.5 py-2.5"
+												style={{
+													borderColor: active ? EMBER : theme.border,
+													backgroundColor: active ? EMBER_TINT : "transparent",
+												}}
 											>
-												{workspace.name}
-											</Text>
+												<Text
+													className="text-sm font-medium"
+													style={{
+														color: active ? EMBER : theme.foreground,
+													}}
+												>
+													{config.label}
+												</Text>
+											</Pressable>
+										);
+									})}
+								</ScrollView>
+							) : (
+								<View className="flex-row items-center gap-2 pb-3">
+									{agentsPhase === "loading" ? (
+										<>
+											<ActivityIndicator
+												size="small"
+												color={theme.mutedForeground}
+											/>
 											<Text
-												className="font-mono text-xs"
+												className="text-sm"
 												style={{ color: theme.mutedForeground }}
-												numberOfLines={1}
 											>
-												{workspace.branch}
+												Reading agents on the host…
 											</Text>
-										</View>
-									</Pressable>
-								))}
-							</ScrollView>
+										</>
+									) : agentsPhase === "offline" ? (
+										<Text
+											className="text-sm"
+											style={{ color: theme.mutedForeground }}
+										>
+											This workspace's host is offline — agents can't launch.
+										</Text>
+									) : (
+										<>
+											<Text
+												className="text-sm"
+												style={{ color: theme.mutedForeground }}
+											>
+												Couldn't read the host's agents.
+											</Text>
+											<Pressable
+												onPress={onRetryAgents}
+												hitSlop={8}
+												accessibilityRole="button"
+											>
+												<Text
+													className="text-sm font-medium"
+													style={{ color: EMBER }}
+												>
+													Retry
+												</Text>
+											</Pressable>
+										</>
+									)}
+								</View>
+							)}
+
+							<Text
+								className="mb-1.5 mt-1 text-xs font-medium uppercase tracking-wide"
+								style={{ color: theme.mutedForeground }}
+							>
+								Prompt
+							</Text>
+							<View
+								className="mb-4 min-h-12 justify-center rounded-2xl border px-3"
+								style={{
+									borderColor: theme.border,
+									backgroundColor: theme.card,
+								}}
+							>
+								<TextInput
+									className="max-h-28 py-2.5 text-base"
+									style={{ color: theme.foreground }}
+									multiline
+									editable={!isLaunching}
+									onChangeText={onChangePrompt}
+									placeholder="What should the agent do?"
+									placeholderTextColor={theme.mutedForeground}
+									value={prompt}
+								/>
+							</View>
+
+							<Pressable
+								accessibilityLabel="Launch agent"
+								accessibilityRole="button"
+								disabled={!canLaunch}
+								onPress={onLaunch}
+								className="h-12 flex-row items-center justify-center gap-2 rounded-2xl"
+								style={{
+									backgroundColor: canLaunch ? EMBER : theme.muted,
+									opacity: canLaunch || isLaunching ? 1 : 0.6,
+								}}
+							>
+								{isLaunching ? (
+									<>
+										<ActivityIndicator size="small" color="#FFFFFF" />
+										<Text className="text-base font-semibold text-white">
+											Starting {selectedAgent?.label ?? "agent"}…
+										</Text>
+									</>
+								) : (
+									<Text
+										className="text-base font-semibold"
+										style={{
+											color: canLaunch ? "#FFFFFF" : theme.mutedForeground,
+										}}
+									>
+										Launch {selectedAgent?.label ?? "agent"}
+									</Text>
+								)}
+							</Pressable>
 						</View>
 					</RNHostView>
 				</Group>

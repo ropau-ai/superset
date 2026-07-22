@@ -48,6 +48,7 @@ export function DashboardSidebarWorkspaceAgentBadge({
 				<button
 					type="button"
 					onClick={handleClick}
+					aria-label={`Open agent ${agent.label} (${statusLabel})`}
 					className={cn(
 						"flex h-[18px] shrink-0 items-center rounded-full px-[3px]",
 						"bg-muted text-[11px] text-muted-foreground",

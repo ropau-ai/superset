@@ -27,7 +27,9 @@ import type {
 import {
 	getTabDisplayName,
 	resolveActiveTabIdForWorkspace,
+	tabHasLiveProcess,
 } from "renderer/stores/tabs/utils";
+import { ClosePaneConfirmDialog } from "../ClosePaneConfirmDialog";
 import { MOSAIC_ID } from "../TabView";
 
 const TAB_DRAG_NO_MATCH_ID = "__tab-drag-no-match__";
@@ -68,6 +70,7 @@ export function GroupItem({
 	const displayName = getTabDisplayName(tab);
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState("");
+	const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 	const activeTabId = useTabsStore((s) =>
 		resolveActiveTabIdForWorkspace({
 			workspaceId: tab.workspaceId,
@@ -76,6 +79,18 @@ export function GroupItem({
 			tabHistoryStacks: s.tabHistoryStacks,
 		}),
 	);
+	const hasLiveProcess = useTabsStore((s) =>
+		tabHasLiveProcess(s.panes, tab.id),
+	);
+
+	// Confirm before closing a group that still has a running agent/process.
+	const requestClose = () => {
+		if (hasLiveProcess) {
+			setConfirmCloseOpen(true);
+			return;
+		}
+		onClose();
+	};
 
 	// Use MosaicDragType.WINDOW so Mosaic's built-in drop targets (blue split indicators) activate
 	const [{ isDragging }, drag, preview] = useDrag<
@@ -206,95 +221,106 @@ export function GroupItem({
 	};
 
 	return (
-		<ContextMenu>
-			<ContextMenuTrigger asChild>
-				<div
-					ref={(node) => {
-						drag(drop(node));
-					}}
-					className={cn(
-						"group relative flex items-center shrink-0 h-full border-r border-border",
-						isOver && canDrop && "bg-primary/5",
-						isDragging && "opacity-50 text-muted-foreground/50",
-					)}
-					style={{ cursor: isDragging ? "grabbing" : undefined }}
-				>
-					{isEditing ? (
-						<div className="flex h-full w-full shrink-0 items-center px-2">
-							<RenameInput
-								value={editValue}
-								onChange={setEditValue}
-								onSubmit={handleSave}
-								onCancel={() => setIsEditing(false)}
-								maxLength={64}
-								className="text-sm w-full min-w-0 px-1 py-0.5 rounded border border-border bg-background text-foreground outline-none focus:ring-1 focus:ring-ring"
-							/>
-						</div>
-					) : (
-						<>
-							<button
-								type="button"
-								onClick={onSelect}
-								onDoubleClick={startEditing}
-								onAuxClick={(e) => {
-									if (e.button === 1) {
-										e.preventDefault();
-										onClose();
-									}
-								}}
-								className={tabStyles}
-							>
-								<span className="text-sm truncate flex-1 text-left">
-									{displayName}
-								</span>
-							</button>
-							{status && status !== "idle" && (
-								<div className="pointer-events-none absolute right-1 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center group-hover:hidden">
-									<StatusIndicator status={status} />
-								</div>
-							)}
-							<div className="absolute right-1 top-1/2 -translate-y-1/2 hidden items-center gap-0.5 group-hover:flex">
-								<Tooltip delayDuration={500}>
-									<TooltipTrigger asChild>
-										<Button
-											type="button"
-											variant="ghost"
-											size="icon"
-											onClick={(e) => {
-												e.stopPropagation();
-												onClose();
-											}}
-											className="cursor-pointer size-6 hover:bg-muted"
-											aria-label="Close pane"
-										>
-											<HiMiniXMark className="size-4" />
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent side="top" showArrow={false}>
-										Close pane
-									</TooltipContent>
-								</Tooltip>
+		<>
+			<ContextMenu>
+				<ContextMenuTrigger asChild>
+					<div
+						ref={(node) => {
+							drag(drop(node));
+						}}
+						className={cn(
+							"group relative flex items-center shrink-0 h-full border-r border-border",
+							isOver && canDrop && "bg-primary/5",
+							isDragging && "opacity-50 text-muted-foreground/50",
+						)}
+						style={{ cursor: isDragging ? "grabbing" : undefined }}
+					>
+						{isEditing ? (
+							<div className="flex h-full w-full shrink-0 items-center px-2">
+								<RenameInput
+									value={editValue}
+									onChange={setEditValue}
+									onSubmit={handleSave}
+									onCancel={() => setIsEditing(false)}
+									maxLength={64}
+									className="text-sm w-full min-w-0 px-1 py-0.5 rounded border border-border bg-background text-foreground outline-none focus:ring-1 focus:ring-ring"
+								/>
 							</div>
-						</>
-					)}
-				</div>
-			</ContextMenuTrigger>
-			<ContextMenuContent>
-				<ContextMenuItem onSelect={startEditing}>
-					<LuPencil className="size-4 mr-2" />
-					Rename
-				</ContextMenuItem>
-				<ContextMenuSeparator />
-				<ContextMenuItem onSelect={onMarkAsUnread}>
-					<LuEyeOff className="size-4 mr-2" />
-					Mark as Unread
-				</ContextMenuItem>
-				<ContextMenuSeparator />
-				<ContextMenuItem onSelect={onClose}>
-					<HiMiniXMark className="size-4 mr-2" />
-					Close
-				</ContextMenuItem>
-			</ContextMenuContent>
-		</ContextMenu>
+						) : (
+							<>
+								<button
+									type="button"
+									onClick={onSelect}
+									onDoubleClick={startEditing}
+									onAuxClick={(e) => {
+										if (e.button === 1) {
+											e.preventDefault();
+											requestClose();
+										}
+									}}
+									className={tabStyles}
+								>
+									<span className="text-sm truncate flex-1 text-left">
+										{displayName}
+									</span>
+								</button>
+								{status && status !== "idle" && (
+									<div className="pointer-events-none absolute right-1 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center group-hover:hidden">
+										<StatusIndicator status={status} />
+									</div>
+								)}
+								<div className="absolute right-1 top-1/2 -translate-y-1/2 hidden items-center gap-0.5 group-hover:flex">
+									<Tooltip delayDuration={500}>
+										<TooltipTrigger asChild>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												onClick={(e) => {
+													e.stopPropagation();
+													requestClose();
+												}}
+												className="cursor-pointer size-6 hover:bg-muted"
+												aria-label="Close pane"
+											>
+												<HiMiniXMark className="size-4" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent side="top" showArrow={false}>
+											Close pane
+										</TooltipContent>
+									</Tooltip>
+								</div>
+							</>
+						)}
+					</div>
+				</ContextMenuTrigger>
+				<ContextMenuContent>
+					<ContextMenuItem onSelect={startEditing}>
+						<LuPencil className="size-4 mr-2" />
+						Rename
+					</ContextMenuItem>
+					<ContextMenuSeparator />
+					<ContextMenuItem onSelect={onMarkAsUnread}>
+						<LuEyeOff className="size-4 mr-2" />
+						Mark as Unread
+					</ContextMenuItem>
+					<ContextMenuSeparator />
+					<ContextMenuItem onSelect={requestClose}>
+						<HiMiniXMark className="size-4 mr-2" />
+						Close
+					</ContextMenuItem>
+				</ContextMenuContent>
+			</ContextMenu>
+			<ClosePaneConfirmDialog
+				open={confirmCloseOpen}
+				onOpenChange={setConfirmCloseOpen}
+				scope="tab"
+				onConfirm={() => {
+					setConfirmCloseOpen(false);
+					onClose();
+				}}
+			/>
+		</>
 	);
 }

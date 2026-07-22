@@ -1,8 +1,8 @@
 import { useLiveQuery } from "@tanstack/react-db";
-import { Stack, useLocalSearchParams } from "expo-router";
-import { Activity, TerminalIcon } from "lucide-react-native";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Activity, FileDiff, TerminalIcon } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,6 +51,7 @@ function SessionDetailSkeleton() {
 
 export function SessionDetailScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
+	const router = useRouter();
 	const collections = useCollections();
 	const { data: authData } = useSession();
 	const organizationId = authData?.session?.activeOrganizationId ?? null;
@@ -102,14 +103,31 @@ export function SessionDetailScreen() {
 		enabled: relayReady,
 	});
 
+	// The session's own terminal (truth link, synced from the host mirror).
+	// Null for pure chat sessions and legacy rows mirrored before the link.
+	const sessionTerminalId = session?.terminalId ?? null;
+
 	const activity = useAgentActivity({
 		routingKey,
 		workspaceId,
 		enabled: relayReady,
 	});
+	// Status + sub-agents scope to the session's OWN terminal when the truth
+	// link exists — two agents in one workspace no longer bleed into each
+	// other's screens. Legacy sessions keep the workspace-wide view.
+	const sessionBindings = useMemo(
+		() =>
+			sessionTerminalId
+				? activity.bindings.filter(
+						(binding) => binding.terminalId === sessionTerminalId,
+					)
+				: activity.bindings,
+		[activity.bindings, sessionTerminalId],
+	);
 	const stream = useTerminalStream({
 		routingKey,
 		workspaceId,
+		terminalId: sessionTerminalId,
 		enabled: relayReady && tab === "terminal",
 	});
 	const sessionActivity = useSessionActivity({
@@ -119,15 +137,26 @@ export function SessionDetailScreen() {
 		enabled: relayReady && tab === "activity",
 	});
 
+	const sessionEnded = session?.endedAt != null;
 	const status = useMemo<LiveAgentStatus>(() => {
+		// The synced `endedAt` is authoritative: the host stamped the terminal's
+		// exit, so don't show a live-looking status derived from sibling bindings.
+		if (sessionEnded) return { kind: "ended", label: "Session ended" };
 		if (!relayConfigured) return { kind: "ended", label: "Status unavailable" };
 		if (hostOnline === false) return { kind: "ended", label: "Host offline" };
 		if (hostOnline === null) return { kind: "ended", label: "No host" };
-		if (activity.phase === "loading" && activity.bindings.length === 0) {
+		if (activity.phase === "loading" && sessionBindings.length === 0) {
 			return { kind: "unknown", label: "Connecting…" };
 		}
-		return deriveAgentStatus(activity.bindings, now);
-	}, [relayConfigured, hostOnline, activity.phase, activity.bindings, now]);
+		return deriveAgentStatus(sessionBindings, now);
+	}, [
+		sessionEnded,
+		relayConfigured,
+		hostOnline,
+		activity.phase,
+		sessionBindings,
+		now,
+	]);
 
 	if (!session) {
 		return (
@@ -153,7 +182,34 @@ export function SessionDetailScreen() {
 		// This kills the old page-ScrollView-wrapping-a-terminal-ScrollView, whose
 		// same-axis nesting made terminal history scroll the page on iOS.
 		<View className="flex-1 gap-5 bg-background p-6">
-			<Stack.Screen options={{ title: workspace?.name ?? "Live session" }} />
+			<Stack.Screen
+				options={{
+					title: workspace?.name ?? "Live session",
+					// "Agent finished → see its diff" in one tap, instead of backing
+					// out through the Workspaces list to reach Changes.
+					headerRight: workspace
+						? () => (
+								<Pressable
+									accessibilityLabel="View changes"
+									accessibilityRole="button"
+									className="size-11 items-center justify-center"
+									hitSlop={6}
+									onPress={() =>
+										router.push(
+											`/(authenticated)/workspace/${workspace.id}/changes`,
+										)
+									}
+								>
+									<Icon
+										as={FileDiff}
+										className="size-5 text-foreground"
+										strokeWidth={1.9}
+									/>
+								</Pressable>
+							)
+						: undefined,
+				}}
+			/>
 			<LiveSessionHeader
 				hostOnline={hostOnline}
 				lastActiveAt={
@@ -168,7 +224,7 @@ export function SessionDetailScreen() {
 			/>
 
 			<SubAgentsPanel
-				bindings={activity.bindings}
+				bindings={sessionBindings}
 				now={now}
 				phase={activity.phase}
 				sessionTokens={tokens}

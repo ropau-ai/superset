@@ -28,19 +28,29 @@ export interface TerminalStreamResult {
 interface UseTerminalStreamArgs {
 	routingKey: string | null;
 	workspaceId: string | null;
+	/**
+	 * The session's own terminal (`chat_sessions.terminalId`). When set, the
+	 * stream attaches to EXACTLY that terminal — never a sibling agent's — and
+	 * reports `no-terminal` if it's gone. Null falls back to workspace discovery
+	 * for legacy rows mirrored before the link existed.
+	 */
+	terminalId?: string | null;
 	/** Relay reachable (configured + host online) AND the panel is open. */
 	enabled: boolean;
 }
 
 /**
- * Discovers a live terminal for the workspace over the relay, then streams its
- * PTY output through {@link TerminalStreamConnection}. Output bytes are decoded,
- * ANSI-stripped, and coalesced into a bounded line buffer that's flushed to
- * React state on a short timer to keep re-renders cheap during bursty output.
+ * Resolves the session's terminal over the relay (exact match by `terminalId`
+ * when the session carries its truth link, workspace discovery otherwise),
+ * then streams its PTY output through {@link TerminalStreamConnection}. Output
+ * bytes are decoded, ANSI-stripped, and coalesced into a bounded line buffer
+ * that's flushed to React state on a short timer to keep re-renders cheap
+ * during bursty output.
  */
 export function useTerminalStream({
 	routingKey,
 	workspaceId,
+	terminalId = null,
 	enabled,
 }: UseTerminalStreamArgs): TerminalStreamResult {
 	const [lines, setLines] = useState<string[]>([]);
@@ -49,7 +59,7 @@ export function useTerminalStream({
 		useState<TerminalStreamState | null>(null);
 	const [terminalTitle, setTerminalTitle] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [_retryToken, setRetryToken] = useState(0);
+	const [retryToken, setRetryToken] = useState(0);
 
 	const linesRef = useRef<string[]>([]);
 	const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,6 +71,10 @@ export function useTerminalStream({
 	const retry = useCallback(() => setRetryToken((n) => n + 1), []);
 
 	useEffect(() => {
+		// `retry()` bumps `retryToken` for the sole purpose of re-running this
+		// effect (fresh discovery + reconnect). Reading it here is what makes the
+		// deps entry below load-bearing — without it the Retry button is a no-op.
+		void retryToken;
 		if (!enabled || !routingKey || !workspaceId) {
 			setPhase("disabled");
 			return;
@@ -76,7 +90,7 @@ export function useTerminalStream({
 		// internal buffer now and let the replay rebuild it — the visible lines
 		// only swap once fresh output flushes, so there's no "Connecting…" flash
 		// or wiped history. A genuinely new target starts clean.
-		const targetKey = `${routingKey}::${workspaceId}`;
+		const targetKey = `${routingKey}::${workspaceId}::${terminalId ?? ""}`;
 		const resumingSameTarget =
 			targetKey === lastTargetRef.current && linesRef.current.length > 0;
 		lastTargetRef.current = targetKey;
@@ -104,7 +118,12 @@ export function useTerminalStream({
 			try {
 				const { sessions } = await listHostTerminals(routingKey, workspaceId);
 				if (disposed) return;
-				const target = sessions.find((s) => !s.exited) ?? sessions[0] ?? null;
+				// Exact resolution when the session knows its terminal — an exited
+				// terminal still attaches (the replay shows its final scrollback)
+				// rather than silently swapping in a sibling agent's terminal.
+				const target = terminalId
+					? (sessions.find((s) => s.terminalId === terminalId) ?? null)
+					: (sessions.find((s) => !s.exited) ?? sessions[0] ?? null);
 				if (!target) {
 					setPhase("no-terminal");
 					return;
@@ -154,7 +173,7 @@ export function useTerminalStream({
 				flushTimer.current = null;
 			}
 		};
-	}, [routingKey, workspaceId, enabled]);
+	}, [routingKey, workspaceId, terminalId, enabled, retryToken]);
 
 	return { lines, phase, connectionState, terminalTitle, error, retry };
 }
