@@ -80,7 +80,14 @@ export function WorkspacesScreen() {
 		}));
 	}, [sortedProjects, workspaces]);
 
-	const selectedProjectId = projectFilter ?? sortedProjects[0]?.id ?? null;
+	// An org switch (or project deletion) can leave the local filter pointing at
+	// an id that no longer exists. Fall back to the first current project instead
+	// of showing a false "No workspaces" state for a stale selection.
+	const selectedProjectId =
+		projectFilter &&
+		sortedProjects.some((project) => project.id === projectFilter)
+			? projectFilter
+			: (sortedProjects[0]?.id ?? null);
 	const selectedProject = sortedProjects.find(
 		(project) => project.id === selectedProjectId,
 	);

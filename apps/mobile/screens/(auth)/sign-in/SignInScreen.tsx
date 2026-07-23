@@ -25,17 +25,21 @@ export function SignInScreen() {
 		setError(null);
 		setLoadingProvider(provider);
 		try {
-			await signIn.social({
+			const result = await signIn.social({
 				provider,
 				callbackURL: "/",
 			});
-			// On success the session lands and RootLayout redirects (this screen
-			// unmounts), so the spinner rides through the OAuth round-trip.
+			if (result.error) {
+				throw new Error(result.error.message);
+			}
 		} catch (err) {
 			const message =
 				err instanceof Error ? err.message : "Something went wrong";
 			console.error("[sign-in] Error:", err);
 			setError(message);
+		} finally {
+			// The Expo auth session also resolves when the browser is dismissed.
+			// Always unlock the buttons so cancelling OAuth never strands the user.
 			setLoadingProvider(null);
 		}
 	};

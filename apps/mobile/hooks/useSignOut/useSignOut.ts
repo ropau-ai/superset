@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert } from "react-native";
-import { signOut } from "@/lib/auth/client";
+import { setJwt, signOut } from "@/lib/auth/client";
 
 export function useSignOut() {
 	const router = useRouter();
@@ -12,7 +12,11 @@ export function useSignOut() {
 	const handleSignOut = useCallback(async () => {
 		setIsSigningOut(true);
 		try {
-			await signOut();
+			const result = await signOut();
+			if (result.error) {
+				throw new Error(result.error.message);
+			}
+			setJwt(null);
 			queryClient.clear();
 			router.replace("/(auth)/sign-in");
 		} catch (error) {

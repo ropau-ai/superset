@@ -49,7 +49,7 @@ export function useTerminalStream({
 		useState<TerminalStreamState | null>(null);
 	const [terminalTitle, setTerminalTitle] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [_retryToken, setRetryToken] = useState(0);
+	const [retryToken, setRetryToken] = useState(0);
 
 	const linesRef = useRef<string[]>([]);
 	const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,6 +57,7 @@ export function useTerminalStream({
 	// flips `enabled`) can be told apart from a genuinely new terminal — the
 	// former keeps its scrollback, the latter starts clean.
 	const lastTargetRef = useRef<string | null>(null);
+	const handledRetryTokenRef = useRef(0);
 
 	const retry = useCallback(() => setRetryToken((n) => n + 1), []);
 
@@ -79,12 +80,14 @@ export function useTerminalStream({
 		const targetKey = `${routingKey}::${workspaceId}`;
 		const resumingSameTarget =
 			targetKey === lastTargetRef.current && linesRef.current.length > 0;
+		const retrying = retryToken !== handledRetryTokenRef.current;
 		lastTargetRef.current = targetKey;
+		handledRetryTokenRef.current = retryToken;
 
 		linesRef.current = [];
 		setError(null);
 		setConnectionState(null);
-		if (resumingSameTarget) {
+		if (resumingSameTarget && !retrying) {
 			setPhase("streaming");
 		} else {
 			setLines([]);
@@ -154,7 +157,7 @@ export function useTerminalStream({
 				flushTimer.current = null;
 			}
 		};
-	}, [routingKey, workspaceId, enabled]);
+	}, [routingKey, workspaceId, enabled, retryToken]);
 
 	return { lines, phase, connectionState, terminalTitle, error, retry };
 }
